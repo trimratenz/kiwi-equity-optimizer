@@ -1,4 +1,4 @@
-import { MARKET_RATE_SNAPSHOT, marketTermMonths } from "./financialModel";
+import { LOCAL_BANK_RATE_WORKSHEET } from "./localMortgageRateWorksheet";
 
 export const RATES_API_BASE_URL = "https://ratesapi.nz";
 export const MORTGAGE_RATES_ENDPOINT = `${RATES_API_BASE_URL}/api/v1/mortgage-rates`;
@@ -83,7 +83,23 @@ function extractRateRecords(node, context = {}, output = []) {
   return output;
 }
 
+function ratesApiTermsAreUnverified(payload) {
+  const terms = String(payload?.termsOfUse || "").toLowerCase();
+  return terms.includes("interest.co.nz") || terms.includes("not guaranteed");
+}
+
 export function normalizeMortgageRatesResponse(payload) {
+  if (ratesApiTermsAreUnverified(payload)) {
+    return {
+      ...LOCAL_BANK_RATE_WORKSHEET,
+      status: "unverified-api",
+      source: LOCAL_BANK_RATE_WORKSHEET.source,
+      note: `${LOCAL_BANK_RATE_WORKSHEET.note} Rates API terms say its data is retrieved from interest.co.nz and is not guaranteed.`,
+      apiTermsOfUse: payload.termsOfUse,
+      rawRecords: []
+    };
+  }
+
   const records = extractRateRecords(payload);
   const grouped = new Map();
 
@@ -108,14 +124,14 @@ export function normalizeMortgageRatesResponse(payload) {
 
   return {
     rates: mergeLiveRatesWithFallback(liveRates),
+    verificationStatus: "api-no-warning",
     rawRecords: records
   };
 }
 
 function mergeLiveRatesWithFallback(liveRates) {
-  return MARKET_RATE_SNAPSHOT.rates.map((fallbackRate) => {
-    const fallbackMonths = marketTermMonths(fallbackRate.term);
-    const liveRate = liveRates.find((rate) => rate.termInMonths === fallbackMonths);
+  return LOCAL_BANK_RATE_WORKSHEET.rates.map((fallbackRate) => {
+    const liveRate = liveRates.find((rate) => rate.termInMonths === fallbackRate.termInMonths);
     return liveRate ?? fallbackRate;
   });
 }

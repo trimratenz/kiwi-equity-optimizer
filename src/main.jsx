@@ -11,7 +11,6 @@ import { RepaymentSummaryStep } from "./components/RepaymentSummaryStep";
 import { Stat } from "./components/ui";
 import {
   FREQUENCY_CONFIG,
-  MARKET_RATE_SNAPSHOT,
   calculatePayment,
   currency,
   forecastRefixRows,
@@ -22,6 +21,7 @@ import {
   trancheRows,
   weightedLoanSnapshot
 } from "./financialModel";
+import { LOCAL_BANK_RATE_WORKSHEET } from "./localMortgageRateWorksheet";
 import { getInitialMortgageFormState, mortgageFormReducer, toNumber, toPositive } from "./mortgageFormState";
 import { MORTGAGE_RATES_ENDPOINT, fetchMortgageRates } from "./ratesApi";
 
@@ -49,11 +49,11 @@ function App() {
   const [formState, dispatch] = useReducer(mortgageFormReducer, undefined, getStoredMortgageFormState);
   const [selectedForecastTrancheId, setSelectedForecastTrancheId] = useState("");
   const [marketRates, setMarketRates] = useState({
-    rates: MARKET_RATE_SNAPSHOT.rates,
-    captured: MARKET_RATE_SNAPSHOT.captured,
-    source: MARKET_RATE_SNAPSHOT.source,
-    note: MARKET_RATE_SNAPSHOT.note,
-    url: MARKET_RATE_SNAPSHOT.url,
+    rates: LOCAL_BANK_RATE_WORKSHEET.rates,
+    captured: LOCAL_BANK_RATE_WORKSHEET.captured,
+    source: LOCAL_BANK_RATE_WORKSHEET.source,
+    note: LOCAL_BANK_RATE_WORKSHEET.note,
+    url: LOCAL_BANK_RATE_WORKSHEET.url,
     status: "idle",
     error: ""
   });
@@ -73,6 +73,19 @@ function App() {
         const result = await fetchMortgageRates();
         if (cancelled) return;
 
+        if (result.status === "unverified-api") {
+          setMarketRates({
+            rates: result.rates,
+            captured: result.captured,
+            source: result.source,
+            note: result.note,
+            url: "",
+            status: "worksheet",
+            error: "Rates API unverified against bank websites"
+          });
+          return;
+        }
+
         setMarketRates({
           rates: result.rates,
           captured: new Date().toISOString().slice(0, 10),
@@ -86,11 +99,11 @@ function App() {
         if (cancelled) return;
 
         setMarketRates({
-          rates: MARKET_RATE_SNAPSHOT.rates,
-          captured: MARKET_RATE_SNAPSHOT.captured,
-          source: MARKET_RATE_SNAPSHOT.source,
-          note: `${MARKET_RATE_SNAPSHOT.note} Live Rates API connection unavailable: ${error.message}.`,
-          url: MARKET_RATE_SNAPSHOT.url,
+          rates: LOCAL_BANK_RATE_WORKSHEET.rates,
+          captured: LOCAL_BANK_RATE_WORKSHEET.captured,
+          source: LOCAL_BANK_RATE_WORKSHEET.source,
+          note: `${LOCAL_BANK_RATE_WORKSHEET.note} Rates API connection unavailable: ${error.message}.`,
+          url: LOCAL_BANK_RATE_WORKSHEET.url,
           status: "fallback",
           error: error.message
         });

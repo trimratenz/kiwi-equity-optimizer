@@ -4,11 +4,11 @@ import { FREQUENCY_CONFIG, currency, percent } from "../financialModel";
 import { ResponsiveTable, StepShell } from "./ui";
 
 export function MarketRateComparisonStep({ marketRateRows, marketRates }) {
-  const hasLiveRatesUrl = Boolean(marketRates.url);
   const statusLabel = {
     idle: "Local worksheet",
     loading: "Loading live rates",
     live: "Live Rates API",
+    worksheet: "Local worksheet",
     fallback: "Fallback rates"
   }[marketRates.status];
 
@@ -29,7 +29,7 @@ export function MarketRateComparisonStep({ marketRateRows, marketRates }) {
           </span>
         )}
       </div>
-      <div className={`grid gap-5 ${hasLiveRatesUrl ? "xl:grid-cols-[1fr_300px]" : ""}`}>
+      <div className="grid gap-5">
         <ResponsiveTable>
           <thead className="bg-[#F7F5F0] text-xs uppercase tracking-wide text-[#7B756E]">
             <tr>
@@ -71,18 +71,6 @@ export function MarketRateComparisonStep({ marketRateRows, marketRates }) {
             ))}
           </tbody>
         </ResponsiveTable>
-        {hasLiveRatesUrl && (
-          <div className="grid content-start gap-3">
-            <a
-              href={marketRates.url}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-lg border border-[#3A6047]/60 bg-[#3A6047]/10 px-4 py-3 text-sm font-black text-[#3A6047] hover:bg-[#3A6047] hover:text-white"
-            >
-              View live endpoint
-            </a>
-          </div>
-        )}
       </div>
       <p className="mt-4 text-xs leading-5 text-[#7B756E]">{marketRates.note}</p>
     </StepShell>

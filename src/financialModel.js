@@ -58,17 +58,19 @@ export const FIXED_TERM_OPTIONS = [
 ];
 
 export const MARKET_RATE_SNAPSHOT = {
-  source: "Manual lender-rate worksheet",
+  source: "Local bank-rate worksheet",
   url: "",
-  captured: "2026-07-04",
-  note: "Placeholder comparison rates. For a public tool, replace these with licensed lender data, user-entered rates, or an official/permissioned feed.",
+  captured: "2026-07-05",
+  note: "Local comparison worksheet used when live rate feeds cannot be verified against each bank website. Confirm rates directly with lenders before re-fixing.",
   rates: [
-    { term: "6 months", rate: 4.64 },
+    { term: "6 months", rate: 4.68 },
     { term: "1 year", rate: 4.73 },
-    { term: "18 months", rate: 5.08 },
+    { term: "18 months", rate: 5.12 },
     { term: "2 years", rate: 5.24 },
-    { term: "Revolving", rate: 5.86 },
-    { term: "Floating", rate: 5.82 }
+    { term: "3 years", rate: 5.35 },
+    { term: "4 years", rate: 5.47 },
+    { term: "5 years", rate: 5.57 },
+    { term: "Floating", rate: 5.81 }
   ]
 };
 
