@@ -48,6 +48,8 @@ function getStoredMortgageFormState() {
 function App() {
   const [formState, dispatch] = useReducer(mortgageFormReducer, undefined, getStoredMortgageFormState);
   const [selectedForecastTrancheId, setSelectedForecastTrancheId] = useState("");
+  const [selectedForecastTermMonths, setSelectedForecastTermMonths] = useState(12);
+  const [selectedForecastScenarioKey, setSelectedForecastScenarioKey] = useState("base");
   const [selectedMarketBankId, setSelectedMarketBankId] = useState("");
   const [marketRates, setMarketRates] = useState({
     rates: MARKET_RATE_SNAPSHOT.rates,
@@ -212,8 +214,13 @@ function App() {
       marketRates.rates
     ]
   );
-  const nextForecast = forecastRows[0];
-  const paymentDelta = nextForecast ? nextForecast.repaymentChange : 0;
+  const selectedForecastRow =
+    forecastRows.find((row) => row.months === selectedForecastTermMonths) ?? forecastRows.find((row) => row.months === 12) ?? forecastRows[0];
+  const selectedForecastScenario =
+    selectedForecastRow?.scenarios.find((scenario) => scenario.key === selectedForecastScenarioKey) ??
+    selectedForecastRow?.scenarios.find((scenario) => scenario.key === "base") ??
+    selectedForecastRow?.scenarios[0];
+  const paymentDelta = selectedForecastScenario ? selectedForecastScenario.repaymentChange : 0;
   const tranchesWithPayments = useMemo(() => trancheRows(mathTranches, primaryFrequency), [mathTranches, primaryFrequency]);
   const payoffRows = summary.standard.rows.map((row, index) => ({
     year: row.year,
@@ -364,8 +371,8 @@ function App() {
                 label="Next forecast re-fix"
                 value={`${paymentDelta >= 0 ? "+" : ""}${currency(paymentDelta)}`}
                 sub={`${selectedForecastTranche ? `Loan part ${selectedForecastTranche.index}` : "Loan"} at ${
-                  nextForecast?.refixPointLabel ?? "re-fix"
-                }: ${percent(nextForecast?.forecastMortgageRate ?? 0)}`}
+                  selectedForecastRow?.refixPointLabel ?? "re-fix"
+                }: ${percent(selectedForecastScenario?.forecastMortgageRate ?? 0)}`}
                 icon={AlertTriangle}
               />
             </div>
@@ -396,6 +403,10 @@ function App() {
               selectedForecastTrancheId={selectedForecastTrancheId}
               selectedForecastFrequency={selectedForecastFrequency}
               selectedForecastPayment={selectedForecastPayment}
+              selectedForecastScenarioKey={selectedForecastScenarioKey}
+              selectedForecastTermMonths={selectedForecastTermMonths}
+              setSelectedForecastScenarioKey={setSelectedForecastScenarioKey}
+              setSelectedForecastTermMonths={setSelectedForecastTermMonths}
               setSelectedForecastTrancheId={setSelectedForecastTrancheId}
             />
 

@@ -6,7 +6,7 @@ export const FREQUENCY_CONFIG = {
 
 export const OCR_FORECAST_SOURCES = [
   {
-    source: "RBNZ Monetary Policy Statement",
+    source: "RBNZ MPS OCR track",
     url: "https://www.rbnz.govt.nz/monetary-policy/monetary-policy-statement",
     forecast: [
       { months: 6, ocr: 2.6 },
@@ -39,6 +39,35 @@ export const OCR_FORECAST_SOURCES = [
 
 export const CURRENT_OCR_ASSUMPTION = 2.25;
 
+export const MARKET_EXPECTATION_SOURCES = [
+  {
+    source: "90-day bank bill market pricing",
+    url: "https://finance.yahoo.com/quote/%5ENZ90D/",
+    note:
+      "Use a backend or scheduled job to pull Yahoo Finance ^NZ90D with yfinance, then convert the 90-day bank bill yield into an implied OCR path.",
+    weight: 0.45,
+    forecast: [
+      { months: 6, ocr: 2.4 },
+      { months: 12, ocr: 2.45 },
+      { months: 24, ocr: 2.5 },
+      { months: 36, ocr: 2.55 }
+    ]
+  },
+  {
+    source: "RBNZ projection file",
+    url: "https://www.rbnz.govt.nz/statistics",
+    note:
+      "Use RBNZ projection files as the official OCR-track anchor after each Monetary Policy Statement.",
+    weight: 0.55,
+    forecast: [
+      { months: 6, ocr: 2.55 },
+      { months: 12, ocr: 2.5 },
+      { months: 24, ocr: 2.45 },
+      { months: 36, ocr: 2.45 }
+    ]
+  }
+];
+
 export const BANK_MARGIN_ASSUMPTIONS = {
   sixMonth: 1.65,
   fixed1y: 1.85,
@@ -55,7 +84,7 @@ export const FORECAST_SCENARIOS = [
     key: "optimistic",
     label: "Optimistic",
     shortLabel: "Optimistic",
-    rateBuffer: -0.25,
+    rateBuffer: -0.2,
     ocrPassThrough: 0.75,
     tone: "good"
   },
@@ -64,14 +93,14 @@ export const FORECAST_SCENARIOS = [
     label: "Base case",
     shortLabel: "Base",
     rateBuffer: 0,
-    ocrPassThrough: 0.85,
+    ocrPassThrough: 0.9,
     tone: "neutral"
   },
   {
     key: "conservative",
     label: "Conservative",
     shortLabel: "Conservative",
-    rateBuffer: 0.45,
+    rateBuffer: 0.35,
     ocrPassThrough: 1,
     tone: "watch"
   }
@@ -434,6 +463,37 @@ export function consensusOcrForMonths(months) {
   return forecasts.reduce((sum, item) => sum + item, 0) / Math.max(forecasts.length, 1);
 }
 
+function interpolateForecast(source, months) {
+  const targetMonths = Math.max(Number(months) || 0, 0);
+  const sorted = [...source.forecast].sort((a, b) => a.months - b.months);
+  const exact = sorted.find((item) => item.months === targetMonths);
+  if (exact) return exact.ocr;
+
+  const previous = sorted.filter((item) => item.months < targetMonths).at(-1);
+  const next = sorted.find((item) => item.months > targetMonths);
+  if (!previous && !next) return undefined;
+  if (!previous) return next.ocr;
+  if (!next) return previous.ocr;
+
+  const progress = (targetMonths - previous.months) / (next.months - previous.months);
+  return previous.ocr + (next.ocr - previous.ocr) * progress;
+}
+
+export function marketImpliedOcrForMonths(months) {
+  const components = MARKET_EXPECTATION_SOURCES.map((source) => ({
+    source: source.source,
+    weight: source.weight,
+    ocr: interpolateForecast(source, months)
+  })).filter((item) => Number.isFinite(item.ocr));
+  const totalWeight = components.reduce((sum, item) => sum + item.weight, 0) || 1;
+  const blendedOcr = components.reduce((sum, item) => sum + item.ocr * item.weight, 0) / totalWeight;
+
+  return {
+    ocr: blendedOcr,
+    components
+  };
+}
+
 function marketRateForTerm(termLabel, marketRates = []) {
   const exact = marketRates.find((rate) => rate.term === termLabel);
   if (exact) return exact.rate;
@@ -467,7 +527,8 @@ export function forecastRefixRows({
   marketRates = MARKET_RATE_SNAPSHOT.rates
 }) {
   const expiryMonths = Math.max(Number(fixedEndsInMonths) || 0, 0);
-  const forecastOcr = consensusOcrForMonths(expiryMonths);
+  const marketOcr = marketImpliedOcrForMonths(expiryMonths);
+  const forecastOcr = marketOcr.ocr;
   const ocrMove = forecastOcr - CURRENT_OCR_ASSUMPTION;
   const remainingBalance = balanceAfterMonths({
     principal,
@@ -501,6 +562,7 @@ export function forecastRefixRows({
       refixPointMonths: expiryMonths,
       refixPointLabel: monthsLabel(expiryMonths),
       forecastOcr,
+      forecastOcrComponents: marketOcr.components,
       currentOcr: CURRENT_OCR_ASSUMPTION,
       marketRateToday,
       forecastMortgageRate: baseScenario.forecastMortgageRate,
