@@ -1,7 +1,14 @@
 import React from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
-import { FREQUENCY_CONFIG, OCR_FORECAST_SOURCES, currency, monthsLabel, percent } from "../financialModel";
-import { ResponsiveTable, Segmented, Stat, StepShell } from "./ui";
+import {
+  CURRENT_OCR_ASSUMPTION,
+  FREQUENCY_CONFIG,
+  OCR_FORECAST_SOURCES,
+  currency,
+  monthsLabel,
+  percent
+} from "../financialModel";
+import { Segmented, Stat, StepShell } from "./ui";
 
 export function RateStressStep({
   forecastRows,
@@ -60,38 +67,53 @@ export function RateStressStep({
           </div>
         )}
 
-        <ResponsiveTable>
-          <thead className="bg-[#F7F5F0] text-xs uppercase tracking-wide text-[#7B756E]">
-            <tr>
-              <th className="p-3">New fixed term</th>
-              <th className="p-3">Re-fix point</th>
-              <th className="p-3">Consensus OCR</th>
-              <th className="p-3">Forecast mortgage rate</th>
-              <th className="p-3">{FREQUENCY_CONFIG[selectedForecastFrequency].label} repayment</th>
-              <th className="p-3">Change from now</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[#E2DDD5] text-[#1B2A22]">
-            {forecastRows.map((row) => (
-              <tr key={row.months}>
-                <td className="p-3 font-black">{row.label}</td>
-                <td className="p-3">{row.refixPointLabel}</td>
-                <td className="p-3">{percent(row.forecastOcr)}</td>
-                <td className="p-3 font-bold">{percent(row.forecastMortgageRate)}</td>
-                <td className="p-3 font-black text-[#3A6047]">{currency(row.repayment)}</td>
-                <td className={`p-3 font-bold ${row.repaymentChange > 0 ? "text-[#C86A53]" : "text-[#3A6047]"}`}>
-                  {row.repaymentChange >= 0 ? "+" : ""}
-                  {currency(row.repaymentChange)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </ResponsiveTable>
+        <div className="grid gap-3">
+          {forecastRows.map((row) => (
+            <article key={row.months} className="rounded-xl border border-[#E2DDD5] bg-white p-4">
+              <div className="grid gap-3 border-b border-[#E2DDD5] pb-3 sm:grid-cols-[1fr_auto] sm:items-end">
+                <div>
+                  <h3 className="text-lg font-black text-[#1B2A22]">{row.label}</h3>
+                  <p className="mt-1 text-xs font-medium leading-5 text-[#7B756E]">
+                    Re-fix in {row.refixPointLabel}. Current 5-bank average for this term is{" "}
+                    {percent(row.marketRateToday)}.
+                  </p>
+                </div>
+                <div className="text-xs font-bold uppercase tracking-wide text-[#7B756E]">
+                  OCR {percent(CURRENT_OCR_ASSUMPTION)}{" -> "}{percent(row.forecastOcr)}
+                </div>
+              </div>
+              <div className="mt-3 grid gap-2 md:grid-cols-3">
+                {row.scenarios.map((scenario) => (
+                  <div
+                    key={scenario.key}
+                    className={`rounded-lg border p-3 ${
+                      scenario.key === "conservative"
+                        ? "border-[#C86A53]/35 bg-[#C86A53]/5"
+                        : "border-[#E2DDD5] bg-[#F7F5F0]"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-xs font-black uppercase tracking-wide text-[#7B756E]">{scenario.label}</p>
+                      <p className="text-sm font-black text-[#1B2A22]">{percent(scenario.forecastMortgageRate)}</p>
+                    </div>
+                    <p className="mt-2 text-xl font-black text-[#3A6047]">{currency(scenario.repayment)}</p>
+                    <p className={`mt-1 text-xs font-bold ${scenario.repaymentChange > 0 ? "text-[#C86A53]" : "text-[#3A6047]"}`}>
+                      {scenario.repaymentChange >= 0 ? "+" : ""}
+                      {currency(scenario.repaymentChange)} vs current {FREQUENCY_CONFIG[selectedForecastFrequency].label}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </article>
+          ))}
+        </div>
 
         <div className="grid gap-3 rounded-lg bg-[#F7F5F0] p-4 text-sm leading-6 text-[#7B756E] md:grid-cols-[1fr_auto] md:items-center">
           <p>
-            Live refresh should use official, licensed, or manually reviewed forecast data. This local app uses a
-            built-in fallback with the same source shape a permissioned backend feed can replace.
+            Forecasts are modelled from the current 5-bank Rates API curve plus the expected OCR move. To update the
+            OCR path, edit <span className="font-bold text-[#1B2A22]">OCR_FORECAST_SOURCES</span> and{" "}
+            <span className="font-bold text-[#1B2A22]">CURRENT_OCR_ASSUMPTION</span> in src/financialModel.js after
+            each RBNZ OCR decision or Monetary Policy Statement.
           </p>
           <div className="inline-flex items-center gap-2 rounded-lg border border-[#E2DDD5] bg-white px-3 py-2 text-xs font-black uppercase tracking-wide text-[#3A6047]">
             <RefreshCw size={14} aria-hidden="true" />

@@ -11,6 +11,7 @@ import { RepaymentSummaryStep } from "./components/RepaymentSummaryStep";
 import { Stat } from "./components/ui";
 import {
   FREQUENCY_CONFIG,
+  MARKET_RATE_SNAPSHOT,
   calculatePayment,
   currency,
   forecastRefixRows,
@@ -21,9 +22,8 @@ import {
   trancheRows,
   weightedLoanSnapshot
 } from "./financialModel";
-import { LOCAL_BANK_RATE_WORKSHEET } from "./localMortgageRateWorksheet";
 import { getInitialMortgageFormState, mortgageFormReducer, toNumber, toPositive } from "./mortgageFormState";
-import { MORTGAGE_RATES_ENDPOINT, fetchMortgageRates } from "./ratesApi";
+import { fetchMortgageRates } from "./ratesApi";
 
 const FORM_STORAGE_KEY = "kiwi-equity-optimiser-form";
 
@@ -49,11 +49,11 @@ function App() {
   const [formState, dispatch] = useReducer(mortgageFormReducer, undefined, getStoredMortgageFormState);
   const [selectedForecastTrancheId, setSelectedForecastTrancheId] = useState("");
   const [marketRates, setMarketRates] = useState({
-    rates: LOCAL_BANK_RATE_WORKSHEET.rates,
-    captured: LOCAL_BANK_RATE_WORKSHEET.captured,
-    source: LOCAL_BANK_RATE_WORKSHEET.source,
-    note: LOCAL_BANK_RATE_WORKSHEET.note,
-    url: LOCAL_BANK_RATE_WORKSHEET.url,
+    rates: MARKET_RATE_SNAPSHOT.rates,
+    captured: MARKET_RATE_SNAPSHOT.captured,
+    source: MARKET_RATE_SNAPSHOT.source,
+    note: MARKET_RATE_SNAPSHOT.note,
+    url: MARKET_RATE_SNAPSHOT.url,
     status: "idle",
     error: ""
   });
@@ -73,25 +73,12 @@ function App() {
         const result = await fetchMortgageRates();
         if (cancelled) return;
 
-        if (result.status === "unverified-api") {
-          setMarketRates({
-            rates: result.rates,
-            captured: result.captured,
-            source: result.source,
-            note: result.note,
-            url: "",
-            status: "worksheet",
-            error: "Rates API unverified against bank websites"
-          });
-          return;
-        }
-
         setMarketRates({
           rates: result.rates,
-          captured: new Date().toISOString().slice(0, 10),
-          source: "Rates API",
-          note: "Live average mortgage rates from ratesapi.nz, grouped by term across available New Zealand lenders.",
-          url: MORTGAGE_RATES_ENDPOINT,
+          captured: result.captured,
+          source: result.source,
+          note: result.note,
+          url: "",
           status: "live",
           error: ""
         });
@@ -99,11 +86,11 @@ function App() {
         if (cancelled) return;
 
         setMarketRates({
-          rates: LOCAL_BANK_RATE_WORKSHEET.rates,
-          captured: LOCAL_BANK_RATE_WORKSHEET.captured,
-          source: LOCAL_BANK_RATE_WORKSHEET.source,
-          note: `${LOCAL_BANK_RATE_WORKSHEET.note} Rates API connection unavailable: ${error.message}.`,
-          url: LOCAL_BANK_RATE_WORKSHEET.url,
+          rates: MARKET_RATE_SNAPSHOT.rates,
+          captured: MARKET_RATE_SNAPSHOT.captured,
+          source: MARKET_RATE_SNAPSHOT.source,
+          note: `${MARKET_RATE_SNAPSHOT.note} Live rate refresh unavailable: ${error.message}.`,
+          url: MARKET_RATE_SNAPSHOT.url,
           status: "fallback",
           error: error.message
         });
@@ -208,7 +195,8 @@ function App() {
         years: selectedForecastTranche?.termYears ?? modelYears,
         frequency: selectedForecastFrequency,
         currentPayment: selectedForecastPayment,
-        fixedEndsInMonths: selectedForecastTranche?.fixedMonths ?? 0
+        fixedEndsInMonths: selectedForecastTranche?.fixedMonths ?? 0,
+        marketRates: marketRates.rates
       }),
     [
       effectiveLoan,
@@ -216,7 +204,8 @@ function App() {
       modelYears,
       selectedForecastFrequency,
       selectedForecastPayment,
-      selectedForecastTranche
+      selectedForecastTranche,
+      marketRates.rates
     ]
   );
   const nextForecast = forecastRows[0];
@@ -393,8 +382,8 @@ function App() {
       </div>
 
       <footer className="mx-auto max-w-5xl px-4 pb-8 text-xs leading-5 text-[#7B756E] sm:px-6 lg:px-8">
-        Educational model only. OCR and bank-rate forecasts are simulated local assumptions. Property investors should
-        confirm tax treatment with a qualified adviser.
+        Educational model only. Mortgage-rate comparisons use market data where available, while forecasts are modelling
+        assumptions. Confirm final rates and tax treatment with qualified advisers before making a decision.
       </footer>
     </main>
   );

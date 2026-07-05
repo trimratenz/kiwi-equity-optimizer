@@ -5,11 +5,10 @@ import { ResponsiveTable, StepShell } from "./ui";
 
 export function MarketRateComparisonStep({ marketRateRows, marketRates }) {
   const statusLabel = {
-    idle: "Local worksheet",
-    loading: "Loading live rates",
-    live: "Live Rates API",
-    worksheet: "Local worksheet",
-    fallback: "Fallback rates"
+    idle: "Cached rates",
+    loading: "Refreshing rates",
+    live: "Rates API",
+    fallback: "Cached rates"
   }[marketRates.status];
 
   return (
@@ -17,15 +16,15 @@ export function MarketRateComparisonStep({ marketRateRows, marketRates }) {
       step="Step 4"
       icon={Sparkles}
       title="How does each loan part compare?"
-      detail={`Each loan part is matched to the closest average term from ${marketRates.source}, captured ${marketRates.captured}. Use this as a prompt to compare, not as a loan offer.`}
+      detail={`Each loan part is matched to the closest major-bank average from ${marketRates.source}, refreshed ${marketRates.captured}. Use this as a prompt to compare, not as a loan offer.`}
     >
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <span className="rounded-full bg-[#3A6047]/10 px-3 py-1 text-xs font-black uppercase tracking-wide text-[#3A6047]">
           {statusLabel}
         </span>
-        {marketRates.error && (
+        {marketRates.error && marketRates.status === "fallback" && (
           <span className="rounded-full bg-[#C86A53]/10 px-3 py-1 text-xs font-bold text-[#C86A53]">
-            {marketRates.error}
+            Using cached rates
           </span>
         )}
       </div>

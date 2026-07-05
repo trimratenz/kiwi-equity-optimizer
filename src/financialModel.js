@@ -37,6 +37,8 @@ export const OCR_FORECAST_SOURCES = [
   }
 ];
 
+export const CURRENT_OCR_ASSUMPTION = 2.25;
+
 export const BANK_MARGIN_ASSUMPTIONS = {
   sixMonth: 1.65,
   fixed1y: 1.85,
@@ -48,6 +50,33 @@ export const BANK_MARGIN_ASSUMPTIONS = {
   conservativeBuffer: 0.75
 };
 
+export const FORECAST_SCENARIOS = [
+  {
+    key: "optimistic",
+    label: "Optimistic",
+    shortLabel: "Optimistic",
+    rateBuffer: -0.25,
+    ocrPassThrough: 0.75,
+    tone: "good"
+  },
+  {
+    key: "base",
+    label: "Base case",
+    shortLabel: "Base",
+    rateBuffer: 0,
+    ocrPassThrough: 0.85,
+    tone: "neutral"
+  },
+  {
+    key: "conservative",
+    label: "Conservative",
+    shortLabel: "Conservative",
+    rateBuffer: 0.45,
+    ocrPassThrough: 1,
+    tone: "watch"
+  }
+];
+
 export const FIXED_TERM_OPTIONS = [
   { months: 6, label: "6 months", rateType: "sixMonth" },
   { months: 12, label: "1 year", rateType: "fixed1y" },
@@ -58,10 +87,10 @@ export const FIXED_TERM_OPTIONS = [
 ];
 
 export const MARKET_RATE_SNAPSHOT = {
-  source: "Local bank-rate worksheet",
+  source: "Cached 5-bank fallback",
   url: "",
   captured: "2026-07-05",
-  note: "Local comparison worksheet used when live rate feeds cannot be verified against each bank website. Confirm rates directly with lenders before re-fixing.",
+  note: "Cached major-bank comparison rates used only when the live Rates API request is unavailable. Confirm directly with lenders before re-fixing.",
   rates: [
     { term: "6 months", rate: 4.68 },
     { term: "1 year", rate: 4.73 },
@@ -405,6 +434,19 @@ export function consensusOcrForMonths(months) {
   return forecasts.reduce((sum, item) => sum + item, 0) / Math.max(forecasts.length, 1);
 }
 
+function marketRateForTerm(termLabel, marketRates = []) {
+  const exact = marketRates.find((rate) => rate.term === termLabel);
+  if (exact) return exact.rate;
+
+  const targetMonths = marketTermMonths(termLabel);
+  const comparable = marketRates
+    .filter((rate) => marketTermMonths(rate.term) > 0)
+    .map((rate) => ({ ...rate, months: marketTermMonths(rate.term) }))
+    .sort((a, b) => Math.abs(a.months - targetMonths) - Math.abs(b.months - targetMonths));
+
+  return comparable[0]?.rate ?? estimateBankRateFromOcr(CURRENT_OCR_ASSUMPTION, "fixed1y");
+}
+
 export function monthsLabel(months) {
   const safeMonths = Math.max(Math.round(Number(months) || 0), 0);
   if (safeMonths === 0) return "now";
@@ -415,9 +457,18 @@ export function monthsLabel(months) {
   return `${years} yr ${remainingMonths} mo`;
 }
 
-export function forecastRefixRows({ principal, currentRate, years, frequency, currentPayment, fixedEndsInMonths = 0 }) {
+export function forecastRefixRows({
+  principal,
+  currentRate,
+  years,
+  frequency,
+  currentPayment,
+  fixedEndsInMonths = 0,
+  marketRates = MARKET_RATE_SNAPSHOT.rates
+}) {
   const expiryMonths = Math.max(Number(fixedEndsInMonths) || 0, 0);
   const forecastOcr = consensusOcrForMonths(expiryMonths);
+  const ocrMove = forecastOcr - CURRENT_OCR_ASSUMPTION;
   const remainingBalance = balanceAfterMonths({
     principal,
     annualRate: currentRate,
@@ -428,19 +479,36 @@ export function forecastRefixRows({ principal, currentRate, years, frequency, cu
   const remainingYears = Math.max((years * 12 - expiryMonths) / 12, 1);
 
   return FIXED_TERM_OPTIONS.map((term) => {
-    const forecastMortgageRate = estimateBankRateFromOcr(forecastOcr, term.rateType);
-    const repayment = calculatePayment(remainingBalance, forecastMortgageRate, remainingYears, frequency);
+    const marketRateToday = marketRateForTerm(term.label, marketRates);
+    const scenarios = FORECAST_SCENARIOS.map((scenario) => {
+      const forecastMortgageRate = Math.max(
+        0.5,
+        marketRateToday + ocrMove * scenario.ocrPassThrough + scenario.rateBuffer
+      );
+      const repayment = calculatePayment(remainingBalance, forecastMortgageRate, remainingYears, frequency);
+
+      return {
+        ...scenario,
+        forecastMortgageRate,
+        repayment,
+        repaymentChange: repayment - currentPayment
+      };
+    });
+    const baseScenario = scenarios.find((scenario) => scenario.key === "base") ?? scenarios[0];
 
     return {
       ...term,
       refixPointMonths: expiryMonths,
       refixPointLabel: monthsLabel(expiryMonths),
       forecastOcr,
-      forecastMortgageRate,
+      currentOcr: CURRENT_OCR_ASSUMPTION,
+      marketRateToday,
+      forecastMortgageRate: baseScenario.forecastMortgageRate,
       remainingBalance,
       remainingYears,
-      repayment,
-      repaymentChange: repayment - currentPayment
+      repayment: baseScenario.repayment,
+      repaymentChange: baseScenario.repaymentChange,
+      scenarios
     };
   });
 }

@@ -29,12 +29,12 @@ The form-state smoke test validates that adding another loan part preserves exis
 - One loan part by default, with an explicit single-loan vs split-loan choice.
 - Split loan part balances are always user-entered and are never auto-filled from the total loan.
 - Fixed and variable tranche modelling with repayment frequency, loan term, fixed term, fixed expiry, and offset/redraw balance.
-- Local fallback OCR forecast feed shaped around RBNZ, New Zealand Treasury, and permissioned bank economist review inputs.
-- Loan-part re-fix forecast comparison using each part's fixed-end month and projected remaining balance.
+- Local OCR forecast settings shaped around RBNZ, New Zealand Treasury, and a manually editable review input.
+- Loan-part re-fix forecast comparison using each part's fixed-end month, projected remaining balance, and Optimistic/Base/Conservative rate scenarios.
 - Bank-rate estimates from OCR plus retail mortgage margin assumptions.
 - Faster payoff simulator showing interest saved and time saved.
 - Rate comparison views for 6-month, 1-year, 2-year, and floating estimates.
-- Market-rate comparison using a local bank-rate worksheet, with Rates API treated as unverified unless a future backend can confirm it against bank sources.
+- Market-rate comparison using Rates API major-bank averages for ANZ, ASB, BNZ, Kiwibank, and Westpac, with cached fallback rates if the live request is unavailable.
 - Income comparison showing repayment as a share of the user's income per chosen repayment frequency.
 - Tranche breakdown table with repayment and interest totals.
 - Recharts line and bar visualizations.
@@ -46,11 +46,11 @@ The form-state smoke test validates that adding another loan part preserves exis
 3. Conditional transition: all result sections stay hidden until the loan setup is complete and any tranche split balances match the total loan.
 4. What will I pay?: show repayment, effective balance, total interest, total paid, income comparison, and each tranche's repayment.
 5. How does my rate compare?: compare the user's blended rate with an average market-rate snapshot.
-6. What could I pay when I re-fix?: select a loan part, project its balance at the fixed-end month, then compare forecast OCR, estimated mortgage rates, and repayment changes across new fixed-term options.
+6. What could I pay when I re-fix?: select a loan part, project its balance at the fixed-end month, then compare Optimistic, Base case, and Conservative mortgage-rate scenarios across new fixed-term options.
 7. How can I improve this?: let users test extra repayments and interest-only periods, then show interest saved and time saved.
 
 ## Notes
 
-The OCR feed is deliberately local and simulated so the app can run without a backend. In production, replace `OCR_FORECAST_SOURCES` in `src/financialModel.js` with a backend API that uses official, licensed, or manually reviewed source updates. Avoid scraping sites whose terms prohibit systematic extraction or commercial reuse.
+The OCR forecast inputs are deliberately local so the app can run without a backend. Update `CURRENT_OCR_ASSUMPTION` and `OCR_FORECAST_SOURCES` in `src/financialModel.js` after RBNZ OCR decisions or Monetary Policy Statements, or replace them with a backend API later.
 
-Current mortgage-rate comparisons are based on `src/localMortgageRateWorksheet.js`. The app can call `https://ratesapi.nz/api/v1/mortgage-rates` through `src/ratesApi.js`, but Rates API currently states that its data is sourced from interest.co.nz and is not guaranteed. When that warning is present, TrimRate keeps using the local worksheet and asks users to confirm rates directly with lenders before re-fixing.
+Current mortgage-rate comparisons call `https://ratesapi.nz/api/v1/mortgage-rates` through `src/ratesApi.js`. The app filters the feed to ANZ, ASB, BNZ, Kiwibank, and Westpac, excludes obvious green/top-up/offset products from fixed-rate averages, and falls back to a cached major-bank rate set if the live request fails. Confirm final rates directly with lenders before re-fixing.
