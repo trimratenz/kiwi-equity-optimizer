@@ -228,7 +228,6 @@ function App() {
     fasterDebt: summary.accelerated.rows[index]?.debt ?? summary.accelerated.rows.at(-1)?.debt ?? 0
   }));
   const salaryAmount = toPositive(salaryIncome);
-  const repaymentToIncomeRatio = salaryAmount > 0 ? (summary.repayment / salaryAmount) * 100 : 0;
   const marketRateRows = forecastTranches.map((tranche) => {
     const targetMonths = tranche.type === "Fixed" ? tranche.fixedTermMonths || tranche.fixedMonths : 0;
     const comparableRates = marketRates.rates.filter((rate) =>
@@ -364,7 +363,6 @@ function App() {
               modelYears={modelYears}
               salaryIncome={salaryIncome}
               salaryAmount={salaryAmount}
-              repaymentToIncomeRatio={repaymentToIncomeRatio}
               tranchesWithPayments={tranchesWithPayments}
               dispatch={dispatch}
             />
