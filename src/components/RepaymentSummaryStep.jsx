@@ -27,8 +27,8 @@ export function RepaymentSummaryStep({
       title="What will I pay?"
       detail="Start here if you simply need to know the repayment, total cost, and what remains after paying the mortgage."
     >
-      <div className="grid gap-5 xl:grid-cols-[300px_1fr]">
-        <div className="grid gap-3">
+      <div className="grid gap-5">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <Stat
             label={`Total ${FREQUENCY_CONFIG[primaryFrequency].label} repayment`}
             value={currency(totalRepayment)}
@@ -36,19 +36,21 @@ export function RepaymentSummaryStep({
             icon={Banknote}
           />
           <Stat label="Total paid over loan" value={currency(summary.totalPaid)} sub="Principal plus interest" icon={PiggyBank} />
-          <Field
-            label={`${incomePeriodLabel} income`}
-            hint="After tax is best"
-            error={salaryAmount <= 0 ? "Optional, but needed for the income view." : undefined}
-          >
-            <NumberInput
-              value={salaryIncome}
-              onChange={(value) => dispatch({ type: "SET_FIELD", field: "salaryIncome", value, decimal: true })}
-              step={100}
-              prefix="$"
-              placeholder="0"
-            />
-          </Field>
+          <div className="rounded-xl border border-[#E2DDD5] bg-white p-4 shadow-[0_12px_34px_rgba(27,42,34,0.06)]">
+            <Field
+              label={`${incomePeriodLabel} income`}
+              hint="After tax is best"
+              error={salaryAmount <= 0 ? "Optional" : undefined}
+            >
+              <NumberInput
+                value={salaryIncome}
+                onChange={(value) => dispatch({ type: "SET_FIELD", field: "salaryIncome", value, decimal: true })}
+                step={100}
+                prefix="$"
+                placeholder="0"
+              />
+            </Field>
+          </div>
           <Stat
             label="Repayment / income"
             value={salaryAmount > 0 ? percent(repaymentToIncome, 1) : "Add income"}
@@ -62,18 +64,18 @@ export function RepaymentSummaryStep({
             icon={PiggyBank}
           />
         </div>
-        <div className="grid gap-4">
-          <div className="overflow-hidden rounded-xl border border-[#E2DDD5] bg-white">
-            <table className="w-full table-fixed text-left text-xs sm:text-sm">
-              <colgroup>
-                <col className="w-[15%]" />
-                <col className="w-[15%]" />
-                <col className="w-[23%]" />
-                <col className="w-[14%]" />
-                <col className="w-[16%]" />
-                <col className="w-[17%]" />
-              </colgroup>
-              <thead className="bg-[#F7F5F0] text-[10px] uppercase tracking-wide text-[#7B756E] sm:text-xs">
+
+        <div className="overflow-hidden rounded-xl border border-[#E2DDD5] bg-white">
+          <table className="w-full table-fixed text-left text-xs sm:text-sm">
+            <colgroup>
+              <col className="w-[15%]" />
+              <col className="w-[15%]" />
+              <col className="w-[23%]" />
+              <col className="w-[14%]" />
+              <col className="w-[16%]" />
+              <col className="w-[17%]" />
+            </colgroup>
+            <thead className="bg-[#F7F5F0] text-[10px] uppercase tracking-wide text-[#7B756E] sm:text-xs">
               <tr>
                 <th className="px-2 py-3 sm:px-3">Part</th>
                 <th className="px-2 py-3 sm:px-3">Type</th>
@@ -97,18 +99,17 @@ export function RepaymentSummaryStep({
                 </tr>
               ))}
             </tbody>
-              <tfoot className="border-t border-[#E2DDD5] bg-[#F7F5F0] text-[#1B2A22]">
-                <tr>
-                  <td className="px-2 py-3 font-black sm:px-3" colSpan={5}>
-                    Total {periodLabel} repayment
-                  </td>
-                  <td className="break-words px-2 py-3 font-black text-[#3A6047] sm:px-3">
-                    {currency(totalRepayment)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+            <tfoot className="border-t border-[#E2DDD5] bg-[#F7F5F0] text-[#1B2A22]">
+              <tr>
+                <td className="px-2 py-3 font-black sm:px-3" colSpan={5}>
+                  Total {periodLabel} repayment
+                </td>
+                <td className="break-words px-2 py-3 font-black text-[#3A6047] sm:px-3">
+                  {currency(totalRepayment)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
       </div>
     </StepShell>

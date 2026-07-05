@@ -4,69 +4,26 @@ export const FREQUENCY_CONFIG = {
   Monthly: { periodsPerYear: 12, label: "month", short: "mo" }
 };
 
-export const OCR_FORECAST_SOURCES = [
-  {
-    source: "RBNZ MPS OCR track",
-    url: "https://www.rbnz.govt.nz/monetary-policy/monetary-policy-statement",
-    forecast: [
-      { months: 6, ocr: 2.6 },
-      { months: 12, ocr: 2.55 },
-      { months: 24, ocr: 2.45 },
-      { months: 36, ocr: 2.45 }
-    ]
-  },
-  {
-    source: "New Zealand Treasury economic forecasts",
-    url: "https://www.treasury.govt.nz/publications/efu",
-    forecast: [
-      { months: 6, ocr: 2.55 },
-      { months: 12, ocr: 2.5 },
-      { months: 24, ocr: 2.45 },
-      { months: 36, ocr: 2.45 }
-    ]
-  },
-  {
-    source: "Permissioned bank economist review",
-    url: "local://permissioned-bank-forecast",
-    forecast: [
-      { months: 6, ocr: 2.58 },
-      { months: 12, ocr: 2.48 },
-      { months: 24, ocr: 2.4 },
-      { months: 36, ocr: 2.42 }
-    ]
-  }
-];
-
 export const CURRENT_OCR_ASSUMPTION = 2.25;
 
-export const MARKET_EXPECTATION_SOURCES = [
-  {
-    source: "90-day bank bill market pricing",
-    url: "https://finance.yahoo.com/quote/%5ENZ90D/",
-    note:
-      "Use a backend or scheduled job to pull Yahoo Finance ^NZ90D with yfinance, then convert the 90-day bank bill yield into an implied OCR path.",
-    weight: 0.45,
-    forecast: [
-      { months: 6, ocr: 2.4 },
-      { months: 12, ocr: 2.45 },
-      { months: 24, ocr: 2.5 },
-      { months: 36, ocr: 2.55 }
-    ]
-  },
-  {
-    source: "RBNZ projection file",
-    url: "https://www.rbnz.govt.nz/statistics",
-    note:
-      "Use RBNZ projection files as the official OCR-track anchor after each Monetary Policy Statement.",
-    weight: 0.55,
-    forecast: [
-      { months: 6, ocr: 2.55 },
-      { months: 12, ocr: 2.5 },
-      { months: 24, ocr: 2.45 },
-      { months: 36, ocr: 2.45 }
-    ]
-  }
-];
+export const RBNZ_OCR_FORECAST_SOURCE = {
+  source: "RBNZ Monetary Policy Statement OCR track",
+  url: "https://www.rbnz.govt.nz/monetary-policy/monetary-policy-statement",
+  publicationsUrl: "https://www.rbnz.govt.nz/research-and-publications/publications/publications-library",
+  ocrDecisionsUrl: "https://www.rbnz.govt.nz/monetary-policy/about-monetary-policy/official-cash-rate",
+  note:
+    "Update these values from the latest RBNZ Monetary Policy Statement projection tables. Direct RBNZ pages may require browser access because automated fetches can be blocked.",
+  forecast: [
+    { months: 6, ocr: 2.6 },
+    { months: 12, ocr: 2.55 },
+    { months: 24, ocr: 2.45 },
+    { months: 36, ocr: 2.45 },
+    { months: 48, ocr: 2.45 },
+    { months: 60, ocr: 2.45 }
+  ]
+};
+
+export const OCR_FORECAST_SOURCES = [RBNZ_OCR_FORECAST_SOURCE];
 
 export const BANK_MARGIN_ASSUMPTIONS = {
   sixMonth: 1.65,
@@ -479,18 +436,10 @@ function interpolateForecast(source, months) {
   return previous.ocr + (next.ocr - previous.ocr) * progress;
 }
 
-export function marketImpliedOcrForMonths(months) {
-  const components = MARKET_EXPECTATION_SOURCES.map((source) => ({
-    source: source.source,
-    weight: source.weight,
-    ocr: interpolateForecast(source, months)
-  })).filter((item) => Number.isFinite(item.ocr));
-  const totalWeight = components.reduce((sum, item) => sum + item.weight, 0) || 1;
-  const blendedOcr = components.reduce((sum, item) => sum + item.ocr * item.weight, 0) / totalWeight;
-
+export function rbnzOcrForMonths(months) {
   return {
-    ocr: blendedOcr,
-    components
+    ocr: interpolateForecast(RBNZ_OCR_FORECAST_SOURCE, months),
+    source: RBNZ_OCR_FORECAST_SOURCE.source
   };
 }
 
@@ -527,8 +476,8 @@ export function forecastRefixRows({
   marketRates = MARKET_RATE_SNAPSHOT.rates
 }) {
   const expiryMonths = Math.max(Number(fixedEndsInMonths) || 0, 0);
-  const marketOcr = marketImpliedOcrForMonths(expiryMonths);
-  const forecastOcr = marketOcr.ocr;
+  const rbnzOcr = rbnzOcrForMonths(expiryMonths);
+  const forecastOcr = rbnzOcr.ocr;
   const ocrMove = forecastOcr - CURRENT_OCR_ASSUMPTION;
   const remainingBalance = balanceAfterMonths({
     principal,
@@ -562,7 +511,7 @@ export function forecastRefixRows({
       refixPointMonths: expiryMonths,
       refixPointLabel: monthsLabel(expiryMonths),
       forecastOcr,
-      forecastOcrComponents: marketOcr.components,
+      forecastSource: rbnzOcr.source,
       currentOcr: CURRENT_OCR_ASSUMPTION,
       marketRateToday,
       forecastMortgageRate: baseScenario.forecastMortgageRate,

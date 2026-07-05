@@ -29,7 +29,7 @@ The form-state smoke test validates that adding another loan part preserves exis
 - One loan part by default, with an explicit single-loan vs split-loan choice.
 - Split loan part balances are always user-entered and are never auto-filled from the total loan.
 - Fixed and variable tranche modelling with repayment frequency, loan term, fixed term, fixed expiry, and offset/redraw balance.
-- Local OCR forecast settings shaped around RBNZ, New Zealand Treasury, and a manually editable review input.
+- Local OCR forecast settings shaped around the RBNZ Monetary Policy Statement OCR track.
 - Loan-part re-fix forecast comparison using each part's fixed-end month, projected remaining balance, selectable fixed term, and Optimistic/Base/Conservative outlook scenarios.
 - Bank-rate estimates from OCR plus retail mortgage margin assumptions.
 - Faster payoff simulator showing interest saved and time saved.
@@ -46,11 +46,11 @@ The form-state smoke test validates that adding another loan part preserves exis
 3. Conditional transition: all result sections stay hidden until the loan setup is complete and any tranche split balances match the total loan.
 4. What will I pay?: show repayment, effective balance, total interest, total paid, income comparison, and each tranche's repayment.
 5. How does my rate compare?: compare the user's blended rate with an average market-rate snapshot.
-6. What could I pay when I re-fix?: select a loan part, choose one new fixed term, choose an outlook, then see the focused repayment estimate.
+6. What could I pay when I re-fix?: select a loan part and one new fixed term, then compare Optimistic, Base case, and Conservative repayments together.
 7. How can I improve this?: let users test extra repayments and interest-only periods, then show interest saved and time saved.
 
 ## Notes
 
-The OCR forecast inputs are deliberately local so the app can run without a backend. Update `CURRENT_OCR_ASSUMPTION` and `MARKET_EXPECTATION_SOURCES` in `src/financialModel.js` after RBNZ OCR decisions or Monetary Policy Statements, or replace them with a backend API later. The intended backend upgrade is to blend Yahoo Finance `^NZ90D` 90-day bank bill data with the RBNZ projection file track.
+The OCR forecast inputs are deliberately local so the app can run without a backend. Update `CURRENT_OCR_ASSUMPTION` and `RBNZ_OCR_FORECAST_SOURCE` in `src/financialModel.js` after RBNZ OCR decisions or Monetary Policy Statements. The official source pages are the RBNZ Monetary Policy Statement page and the RBNZ publications library.
 
 Current mortgage-rate comparisons call `https://ratesapi.nz/api/v1/mortgage-rates` through `src/ratesApi.js`. The app filters the feed to ANZ, ASB, BNZ, Kiwibank, and Westpac, excludes obvious green/top-up/offset products from fixed-rate averages, and falls back to a cached major-bank rate set if the live request fails. Confirm final rates directly with lenders before re-fixing.

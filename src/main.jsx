@@ -49,7 +49,6 @@ function App() {
   const [formState, dispatch] = useReducer(mortgageFormReducer, undefined, getStoredMortgageFormState);
   const [selectedForecastTrancheId, setSelectedForecastTrancheId] = useState("");
   const [selectedForecastTermMonths, setSelectedForecastTermMonths] = useState(12);
-  const [selectedForecastScenarioKey, setSelectedForecastScenarioKey] = useState("base");
   const [selectedMarketBankId, setSelectedMarketBankId] = useState("");
   const [marketRates, setMarketRates] = useState({
     rates: MARKET_RATE_SNAPSHOT.rates,
@@ -216,10 +215,7 @@ function App() {
   );
   const selectedForecastRow =
     forecastRows.find((row) => row.months === selectedForecastTermMonths) ?? forecastRows.find((row) => row.months === 12) ?? forecastRows[0];
-  const selectedForecastScenario =
-    selectedForecastRow?.scenarios.find((scenario) => scenario.key === selectedForecastScenarioKey) ??
-    selectedForecastRow?.scenarios.find((scenario) => scenario.key === "base") ??
-    selectedForecastRow?.scenarios[0];
+  const selectedForecastScenario = selectedForecastRow?.scenarios.find((scenario) => scenario.key === "base") ?? selectedForecastRow?.scenarios[0];
   const paymentDelta = selectedForecastScenario ? selectedForecastScenario.repaymentChange : 0;
   const tranchesWithPayments = useMemo(() => trancheRows(mathTranches, primaryFrequency), [mathTranches, primaryFrequency]);
   const payoffRows = summary.standard.rows.map((row, index) => ({
@@ -403,9 +399,7 @@ function App() {
               selectedForecastTrancheId={selectedForecastTrancheId}
               selectedForecastFrequency={selectedForecastFrequency}
               selectedForecastPayment={selectedForecastPayment}
-              selectedForecastScenarioKey={selectedForecastScenarioKey}
               selectedForecastTermMonths={selectedForecastTermMonths}
-              setSelectedForecastScenarioKey={setSelectedForecastScenarioKey}
               setSelectedForecastTermMonths={setSelectedForecastTermMonths}
               setSelectedForecastTrancheId={setSelectedForecastTrancheId}
             />
