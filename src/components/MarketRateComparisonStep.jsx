@@ -1,32 +1,53 @@
 import React from "react";
 import { Sparkles } from "lucide-react";
 import { FREQUENCY_CONFIG, currency, percent } from "../financialModel";
-import { ResponsiveTable, StepShell } from "./ui";
+import { ResponsiveTable, Select, StepShell } from "./ui";
 
-export function MarketRateComparisonStep({ marketRateRows, marketRates }) {
+export function MarketRateComparisonStep({
+  bankOptions,
+  marketRateRows,
+  marketRates,
+  selectedBankId,
+  setSelectedBankId
+}) {
   const statusLabel = {
     idle: "Cached rates",
     loading: "Refreshing rates",
     live: "Rates API",
     fallback: "Cached rates"
   }[marketRates.status];
+  const selectedBankName = bankOptions.find((bank) => bank.id === selectedBankId)?.name;
+  const matchedRateLabel = selectedBankName ? `${selectedBankName} rate` : "Matched average";
 
   return (
     <StepShell
       step="Step 4"
       icon={Sparkles}
       title="How does each loan part compare?"
-      detail={`Each loan part is matched to the closest major-bank average from ${marketRates.source}, refreshed ${marketRates.captured}. Use this as a prompt to compare, not as a loan offer.`}
+      detail={`Each loan part is matched to the closest term from ${marketRates.source}, refreshed ${marketRates.captured}. Leave the bank selector blank for the average, or choose one bank for a direct comparison.`}
     >
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <span className="rounded-full bg-[#3A6047]/10 px-3 py-1 text-xs font-black uppercase tracking-wide text-[#3A6047]">
-          {statusLabel}
-        </span>
-        {marketRates.error && marketRates.status === "fallback" && (
-          <span className="rounded-full bg-[#C86A53]/10 px-3 py-1 text-xs font-bold text-[#C86A53]">
-            Using cached rates
+      <div className="mb-4 grid gap-3 lg:grid-cols-[1fr_260px] lg:items-end">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-[#3A6047]/10 px-3 py-1 text-xs font-black uppercase tracking-wide text-[#3A6047]">
+            {statusLabel}
           </span>
-        )}
+          {marketRates.error && marketRates.status === "fallback" && (
+            <span className="rounded-full bg-[#C86A53]/10 px-3 py-1 text-xs font-bold text-[#C86A53]">
+              Using cached rates
+            </span>
+          )}
+        </div>
+        <label className="grid gap-2 text-sm font-semibold text-[#1B2A22]">
+          <span className="text-xs font-bold uppercase tracking-wide text-[#7B756E]">Bank view</span>
+          <Select value={selectedBankId} onChange={setSelectedBankId}>
+            <option value="">All banks average</option>
+            {bankOptions.map((bank) => (
+              <option key={bank.id} value={bank.id}>
+                {bank.name}
+              </option>
+            ))}
+          </Select>
+        </label>
       </div>
       <div className="grid gap-5">
         <ResponsiveTable>
@@ -34,10 +55,11 @@ export function MarketRateComparisonStep({ marketRateRows, marketRates }) {
             <tr>
               <th className="p-3">Loan part</th>
               <th className="p-3">Your setup</th>
-              <th className="p-3">Matched average</th>
+              <th className="p-3">{matchedRateLabel}</th>
+              <th className="p-3">Lowest bank</th>
               <th className="p-3">Your rate</th>
               <th className="p-3">Difference</th>
-              <th className="p-3">Repayment at average</th>
+              <th className="p-3">Repayment at shown rate</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#E2DDD5] text-[#1B2A22]">
@@ -53,7 +75,13 @@ export function MarketRateComparisonStep({ marketRateRows, marketRates }) {
                 </td>
                 <td className="p-3">
                   <p className="font-bold">{percent(row.marketRate)}</p>
-                  <p className="text-xs font-medium text-[#7B756E]">{row.marketTerm}</p>
+                  <p className="text-xs font-medium text-[#7B756E]">
+                    {row.marketTerm} · {row.comparisonSource}
+                  </p>
+                </td>
+                <td className="p-3">
+                  <p className="font-bold">{row.lowestRate === null ? "Unavailable" : percent(row.lowestRate)}</p>
+                  <p className="text-xs font-medium text-[#7B756E]">{row.lowestBank}</p>
                 </td>
                 <td className="p-3">{percent(row.currentRate)}</td>
                 <td className="p-3 font-bold text-[#3A6047]">

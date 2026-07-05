@@ -48,8 +48,10 @@ function getStoredMortgageFormState() {
 function App() {
   const [formState, dispatch] = useReducer(mortgageFormReducer, undefined, getStoredMortgageFormState);
   const [selectedForecastTrancheId, setSelectedForecastTrancheId] = useState("");
+  const [selectedMarketBankId, setSelectedMarketBankId] = useState("");
   const [marketRates, setMarketRates] = useState({
     rates: MARKET_RATE_SNAPSHOT.rates,
+    rawRecords: [],
     captured: MARKET_RATE_SNAPSHOT.captured,
     source: MARKET_RATE_SNAPSHOT.source,
     note: MARKET_RATE_SNAPSHOT.note,
@@ -75,6 +77,7 @@ function App() {
 
         setMarketRates({
           rates: result.rates,
+          rawRecords: result.rawRecords,
           captured: result.captured,
           source: result.source,
           note: result.note,
@@ -87,6 +90,7 @@ function App() {
 
         setMarketRates({
           rates: MARKET_RATE_SNAPSHOT.rates,
+          rawRecords: [],
           captured: MARKET_RATE_SNAPSHOT.captured,
           source: MARKET_RATE_SNAPSHOT.source,
           note: `${MARKET_RATE_SNAPSHOT.note} Live rate refresh unavailable: ${error.message}.`,
@@ -217,6 +221,15 @@ function App() {
     fasterDebt: summary.accelerated.rows[index]?.debt ?? summary.accelerated.rows.at(-1)?.debt ?? 0
   }));
   const salaryAmount = toPositive(salaryIncome);
+  const marketBankOptions = useMemo(() => {
+    const bankMap = new Map();
+    marketRates.rawRecords.forEach((record) => {
+      bankMap.set(record.institutionId, record.institution);
+    });
+    return [...bankMap.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [marketRates.rawRecords]);
   const marketRateRows = forecastTranches.map((tranche) => {
     const targetMonths = tranche.type === "Fixed" ? tranche.fixedTermMonths || tranche.fixedMonths : 0;
     const comparableRates = marketRates.rates.filter((rate) =>
@@ -227,7 +240,16 @@ function App() {
         .map((rate) => ({ ...rate, months: marketTermMonths(rate.term) }))
         .sort((a, b) => Math.abs(a.months - targetMonths) - Math.abs(b.months - targetMonths))[0] ??
       marketRates.rates[0];
-    const marketRepayment = calculatePayment(tranche.amount, closestRate.rate, tranche.termYears, tranche.frequency);
+    const matchedMonths = closestRate.termInMonths ?? marketTermMonths(closestRate.term);
+    const selectedBankRate = marketRates.rawRecords.find(
+      (record) => record.institutionId === selectedMarketBankId && record.termInMonths === matchedMonths
+    );
+    const lowestRate = marketRates.rawRecords
+      .filter((record) => record.termInMonths === matchedMonths)
+      .sort((a, b) => a.rate - b.rate)[0];
+    const comparisonRate = selectedBankRate?.rate ?? closestRate.rate;
+    const comparisonSource = selectedBankRate?.institution ?? "5-bank average";
+    const marketRepayment = calculatePayment(tranche.amount, comparisonRate, tranche.termYears, tranche.frequency);
     const currentRepayment = calculatePayment(tranche.amount, tranche.rate, tranche.termYears, tranche.frequency);
 
     return {
@@ -238,9 +260,12 @@ function App() {
       frequency: tranche.frequency,
       fixedTermLabel: tranche.type === "Fixed" ? monthsLabel(targetMonths) : "Variable",
       marketTerm: closestRate.term,
-      marketRate: closestRate.rate,
+      marketRate: comparisonRate,
+      comparisonSource,
+      lowestBank: lowestRate?.institution ?? "Unavailable",
+      lowestRate: lowestRate?.rate ?? null,
       currentRate: tranche.rate,
-      difference: tranche.rate ? tranche.rate - closestRate.rate : 0,
+      difference: tranche.rate ? tranche.rate - comparisonRate : 0,
       currentRepayment,
       marketRepayment
     };
@@ -356,7 +381,13 @@ function App() {
               dispatch={dispatch}
             />
 
-            <MarketRateComparisonStep marketRateRows={marketRateRows} marketRates={marketRates} />
+            <MarketRateComparisonStep
+              bankOptions={marketBankOptions}
+              marketRateRows={marketRateRows}
+              marketRates={marketRates}
+              selectedBankId={selectedMarketBankId}
+              setSelectedBankId={setSelectedMarketBankId}
+            />
 
             <RateStressStep
               forecastRows={forecastRows}
