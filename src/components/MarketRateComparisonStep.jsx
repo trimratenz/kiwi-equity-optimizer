@@ -1,18 +1,34 @@
 import React from "react";
 import { Sparkles } from "lucide-react";
-import { MARKET_RATE_SNAPSHOT, FREQUENCY_CONFIG, currency, percent } from "../financialModel";
+import { FREQUENCY_CONFIG, currency, percent } from "../financialModel";
 import { ResponsiveTable, StepShell } from "./ui";
 
-export function MarketRateComparisonStep({ marketRateRows }) {
-  const hasLiveRatesUrl = Boolean(MARKET_RATE_SNAPSHOT.url);
+export function MarketRateComparisonStep({ marketRateRows, marketRates }) {
+  const hasLiveRatesUrl = Boolean(marketRates.url);
+  const statusLabel = {
+    idle: "Local worksheet",
+    loading: "Loading live rates",
+    live: "Live Rates API",
+    fallback: "Fallback rates"
+  }[marketRates.status];
 
   return (
     <StepShell
       step="Step 4"
       icon={Sparkles}
       title="How does each loan part compare?"
-      detail={`Each loan part is matched to the closest average term from ${MARKET_RATE_SNAPSHOT.source}, captured ${MARKET_RATE_SNAPSHOT.captured}. Use this as a prompt to compare, not as a loan offer.`}
+      detail={`Each loan part is matched to the closest average term from ${marketRates.source}, captured ${marketRates.captured}. Use this as a prompt to compare, not as a loan offer.`}
     >
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <span className="rounded-full bg-[#3A6047]/10 px-3 py-1 text-xs font-black uppercase tracking-wide text-[#3A6047]">
+          {statusLabel}
+        </span>
+        {marketRates.error && (
+          <span className="rounded-full bg-[#C86A53]/10 px-3 py-1 text-xs font-bold text-[#C86A53]">
+            {marketRates.error}
+          </span>
+        )}
+      </div>
       <div className={`grid gap-5 ${hasLiveRatesUrl ? "xl:grid-cols-[1fr_300px]" : ""}`}>
         <ResponsiveTable>
           <thead className="bg-[#F7F5F0] text-xs uppercase tracking-wide text-[#7B756E]">
@@ -58,17 +74,17 @@ export function MarketRateComparisonStep({ marketRateRows }) {
         {hasLiveRatesUrl && (
           <div className="grid content-start gap-3">
             <a
-              href={MARKET_RATE_SNAPSHOT.url}
+              href={marketRates.url}
               target="_blank"
               rel="noreferrer"
               className="rounded-lg border border-[#3A6047]/60 bg-[#3A6047]/10 px-4 py-3 text-sm font-black text-[#3A6047] hover:bg-[#3A6047] hover:text-white"
             >
-              Check live rates
+              View live endpoint
             </a>
           </div>
         )}
       </div>
-      <p className="mt-4 text-xs leading-5 text-[#7B756E]">{MARKET_RATE_SNAPSHOT.note}</p>
+      <p className="mt-4 text-xs leading-5 text-[#7B756E]">{marketRates.note}</p>
     </StepShell>
   );
 }

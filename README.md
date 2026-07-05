@@ -34,7 +34,7 @@ The form-state smoke test validates that adding another loan part preserves exis
 - Bank-rate estimates from OCR plus retail mortgage margin assumptions.
 - Faster payoff simulator showing interest saved and time saved.
 - Rate comparison views for 6-month, 1-year, 2-year, and floating estimates.
-- Market-rate comparison using placeholder lender-rate worksheet data.
+- Market-rate comparison using live Rates API mortgage-rate data with a local worksheet fallback.
 - Income comparison showing repayment as a share of the user's income per chosen repayment frequency.
 - Tranche breakdown table with repayment and interest totals.
 - Recharts line and bar visualizations.
@@ -52,3 +52,5 @@ The form-state smoke test validates that adding another loan part preserves exis
 ## Notes
 
 The OCR feed is deliberately local and simulated so the app can run without a backend. In production, replace `OCR_FORECAST_SOURCES` in `src/financialModel.js` with a backend API that uses official, licensed, or manually reviewed source updates. Avoid scraping sites whose terms prohibit systematic extraction or commercial reuse.
+
+Current mortgage-rate comparisons call `https://ratesapi.nz/api/v1/mortgage-rates` through `src/ratesApi.js`. If the live API request fails, the app falls back to `MARKET_RATE_SNAPSHOT` so the calculator remains usable.

@@ -23,6 +23,7 @@ import {
   weightedLoanSnapshot
 } from "./financialModel";
 import { getInitialMortgageFormState, mortgageFormReducer, toNumber, toPositive } from "./mortgageFormState";
+import { MORTGAGE_RATES_ENDPOINT, fetchMortgageRates } from "./ratesApi";
 
 const FORM_STORAGE_KEY = "kiwi-equity-optimiser-form";
 
@@ -47,11 +48,61 @@ function getStoredMortgageFormState() {
 function App() {
   const [formState, dispatch] = useReducer(mortgageFormReducer, undefined, getStoredMortgageFormState);
   const [selectedForecastTrancheId, setSelectedForecastTrancheId] = useState("");
+  const [marketRates, setMarketRates] = useState({
+    rates: MARKET_RATE_SNAPSHOT.rates,
+    captured: MARKET_RATE_SNAPSHOT.captured,
+    source: MARKET_RATE_SNAPSHOT.source,
+    note: MARKET_RATE_SNAPSHOT.note,
+    url: MARKET_RATE_SNAPSHOT.url,
+    status: "idle",
+    error: ""
+  });
   const { loanBalance, loanStructure, salaryIncome, extraPayment, interestOnlyYears, tranches } = formState;
 
   useEffect(() => {
     window.localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(formState));
   }, [formState]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMarketRates() {
+      setMarketRates((current) => ({ ...current, status: "loading", error: "" }));
+
+      try {
+        const result = await fetchMortgageRates();
+        if (cancelled) return;
+
+        setMarketRates({
+          rates: result.rates,
+          captured: new Date().toISOString().slice(0, 10),
+          source: "Rates API",
+          note: "Live average mortgage rates from ratesapi.nz, grouped by term across available New Zealand lenders.",
+          url: MORTGAGE_RATES_ENDPOINT,
+          status: "live",
+          error: ""
+        });
+      } catch (error) {
+        if (cancelled) return;
+
+        setMarketRates({
+          rates: MARKET_RATE_SNAPSHOT.rates,
+          captured: MARKET_RATE_SNAPSHOT.captured,
+          source: MARKET_RATE_SNAPSHOT.source,
+          note: `${MARKET_RATE_SNAPSHOT.note} Live Rates API connection unavailable: ${error.message}.`,
+          url: MARKET_RATE_SNAPSHOT.url,
+          status: "fallback",
+          error: error.message
+        });
+      }
+    }
+
+    loadMarketRates();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const loanAmount = toPositive(loanBalance);
   const isSplitLoan = loanStructure === "split";
@@ -167,14 +218,14 @@ function App() {
   const repaymentToIncomeRatio = salaryAmount > 0 ? (summary.repayment / salaryAmount) * 100 : 0;
   const marketRateRows = forecastTranches.map((tranche) => {
     const targetMonths = tranche.type === "Fixed" ? tranche.fixedTermMonths || tranche.fixedMonths : 0;
-    const comparableRates = MARKET_RATE_SNAPSHOT.rates.filter((rate) =>
+    const comparableRates = marketRates.rates.filter((rate) =>
       tranche.type === "Variable" ? marketTermMonths(rate.term) === 0 : marketTermMonths(rate.term) > 0
     );
     const closestRate =
       comparableRates
         .map((rate) => ({ ...rate, months: marketTermMonths(rate.term) }))
         .sort((a, b) => Math.abs(a.months - targetMonths) - Math.abs(b.months - targetMonths))[0] ??
-      MARKET_RATE_SNAPSHOT.rates[0];
+      marketRates.rates[0];
     const marketRepayment = calculatePayment(tranche.amount, closestRate.rate, tranche.termYears, tranche.frequency);
     const currentRepayment = calculatePayment(tranche.amount, tranche.rate, tranche.termYears, tranche.frequency);
 
@@ -305,7 +356,7 @@ function App() {
               dispatch={dispatch}
             />
 
-            <MarketRateComparisonStep marketRateRows={marketRateRows} />
+            <MarketRateComparisonStep marketRateRows={marketRateRows} marketRates={marketRates} />
 
             <RateStressStep
               forecastRows={forecastRows}
