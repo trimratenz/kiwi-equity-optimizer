@@ -5,7 +5,7 @@ A local React app for helping New Zealand property owners understand mortgage se
 ## Run locally
 
 ```powershell
-cd kiwi-equity-optimizer
+cd trimratenz
 npm install
 npm run dev
 ```

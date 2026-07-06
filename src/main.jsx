@@ -25,7 +25,7 @@ import {
 import { getInitialMortgageFormState, mortgageFormReducer, toNumber, toPositive } from "./mortgageFormState";
 import { fetchMortgageRates } from "./ratesApi";
 
-const FORM_STORAGE_KEY = "kiwi-equity-optimiser-form";
+const FORM_STORAGE_KEY = "trimratenz-form";
 
 function getStoredMortgageFormState() {
   const initialState = getInitialMortgageFormState();
