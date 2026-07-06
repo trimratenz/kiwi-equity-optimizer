@@ -3,7 +3,8 @@ export function getInitialMortgageFormState() {
     loanBalance: "",
     loanStructure: "single",
     salaryIncome: "",
-    extraPayment: "100",
+    extraPayment: "",
+    outgoingCosts: "",
     interestOnlyYears: "0",
     ocrScenario: "Forecast",
     tranches: [createTranche()]
@@ -38,7 +39,7 @@ export function normalizeDecimalInput(value) {
 }
 
 export function toNumber(value) {
-  return Number(value) || 0;
+  return Number(String(value ?? "").replace(/,/g, "")) || 0;
 }
 
 export function toPositive(value) {

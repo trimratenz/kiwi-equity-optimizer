@@ -10,15 +10,16 @@ export function RepaymentSummaryStep({
   modelYears,
   salaryIncome,
   salaryAmount,
+  dtiRatio,
+  dti,
   tranchesWithPayments,
   dispatch
 }) {
-  const periodLabel = FREQUENCY_CONFIG[primaryFrequency].label;
-  const incomePeriodLabel = `${periodLabel.charAt(0).toUpperCase()}${periodLabel.slice(1)}ly`;
+  const frequencyLabel = primaryFrequency;
   const totalAnnualRepayment = tranchesWithPayments.reduce((sum, tranche) => sum + tranche.annualPayment, 0);
-  const totalRepayment = totalAnnualRepayment / FREQUENCY_CONFIG[primaryFrequency].periodsPerYear;
-  const repaymentToIncome = salaryAmount > 0 ? (totalRepayment / salaryAmount) * 100 : 0;
-  const cashAfterRepayment = Math.max(salaryAmount - totalRepayment, 0);
+  const repaymentPerSelectedPeriod = totalAnnualRepayment / FREQUENCY_CONFIG[primaryFrequency].periodsPerYear;
+  const repaymentToIncome = salaryAmount > 0 ? (repaymentPerSelectedPeriod / salaryAmount) * 100 : 0;
+  const cashAfterRepayment = salaryAmount - repaymentPerSelectedPeriod;
 
   return (
     <StepShell
@@ -28,17 +29,17 @@ export function RepaymentSummaryStep({
       detail="Start here if you simply need to know the repayment, total cost, and what remains after paying the mortgage."
     >
       <div className="grid gap-5">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-4 rounded-2xl border border-[#E2DDD5] bg-[#F7F5F0] p-4 sm:p-5 md:grid-cols-2 xl:grid-cols-6">
           <Stat
-            label={`Total ${FREQUENCY_CONFIG[primaryFrequency].label} repayment`}
-            value={currency(totalRepayment)}
-            sub={`At blended ${percent(modelRate)} over ${modelYears} years`}
+            label={`${frequencyLabel} Repayment`}
+            value={currency(repaymentPerSelectedPeriod)}
+            sub={`Weighted ${percent(modelRate)} over ${modelYears} years`}
             icon={Banknote}
+            className="xl:col-span-3 xl:p-6"
           />
-          <Stat label="Total paid over loan" value={currency(summary.totalPaid)} sub="Principal plus interest" icon={PiggyBank} />
-          <div className="rounded-xl border border-[#E2DDD5] bg-white p-4 shadow-[0_12px_34px_rgba(27,42,34,0.06)]">
+          <div className="rounded-xl border border-[#E2DDD5] bg-white p-4 shadow-[0_12px_34px_rgba(27,42,34,0.06)] xl:col-span-3 xl:p-6">
             <Field
-              label={`${incomePeriodLabel} income`}
+              label={`${frequencyLabel} Income`}
               hint="After tax is best"
               error={salaryAmount <= 0 ? "Optional" : undefined}
             >
@@ -48,21 +49,47 @@ export function RepaymentSummaryStep({
                 step={100}
                 prefix="$"
                 placeholder="0"
+                thousands
               />
             </Field>
           </div>
           <Stat
-            label="Repayment / income"
-            value={salaryAmount > 0 ? percent(repaymentToIncome, 1) : "Add income"}
-            sub={salaryAmount > 0 ? `${currency(totalRepayment)} of ${currency(salaryAmount)}` : `Every ${periodLabel}`}
-            icon={PieChart}
+            label="Cash After Repayment"
+            value={salaryAmount > 0 ? currency(cashAfterRepayment) : "Add income"}
+            sub={salaryAmount > 0 ? `${frequencyLabel} surplus after standard mortgage payments` : `Enter ${primaryFrequency.toLowerCase()} income above`}
+            icon={PiggyBank}
+            className="xl:col-span-3 xl:p-6"
           />
           <Stat
-            label="Cash after repayment"
-            value={salaryAmount > 0 ? currency(cashAfterRepayment) : "Add income"}
-            sub={`Every ${periodLabel}`}
-            icon={PiggyBank}
+            label="Repayment / income"
+            value={salaryAmount > 0 ? percent(repaymentToIncome, 1) : "Add income"}
+            sub={salaryAmount > 0 ? `${currency(repaymentPerSelectedPeriod)} of ${currency(salaryAmount)}` : frequencyLabel}
+            icon={PieChart}
+            className="xl:col-span-3"
           />
+          <div className="rounded-xl border border-[#E2DDD5] bg-white p-4 shadow-[0_12px_34px_rgba(27,42,34,0.06)] xl:col-span-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-[#7B756E]">DTI scale</p>
+              <span className="rounded-lg bg-[#F7F5F0] px-2 py-1 text-xs font-black text-[#3A6047]">
+                {salaryAmount > 0 ? `${dtiRatio.toFixed(2)}x` : "Add income"}
+              </span>
+            </div>
+            <div className="mt-4">
+              <div className="relative h-3 rounded-full bg-gradient-to-r from-[#3A6047] via-[#D8A344] to-[#C86A53]">
+                <span
+                  className="absolute top-1/2 h-5 w-1 -translate-y-1/2 rounded-full bg-[#1B2A22]"
+                  style={{ left: `calc(${dti.position}% - 2px)` }}
+                />
+              </div>
+              <div className="mt-2 grid grid-cols-4 text-[10px] font-bold uppercase tracking-wide text-[#7B756E]">
+                <span>0x</span>
+                <span>5x watch</span>
+                <span>6x owner</span>
+                <span className="text-right">7x investor</span>
+              </div>
+            </div>
+            <p className="mt-3 text-xs font-medium leading-5 text-[#7B756E]">{dti.detail}</p>
+          </div>
         </div>
 
         <div className="overflow-hidden rounded-xl border border-[#E2DDD5] bg-white">
@@ -101,11 +128,11 @@ export function RepaymentSummaryStep({
             </tbody>
             <tfoot className="border-t border-[#E2DDD5] bg-[#F7F5F0] text-[#1B2A22]">
               <tr>
-                <td className="px-2 py-3 font-black sm:px-3" colSpan={5}>
-                  Total {periodLabel} repayment
+                  <td className="px-2 py-3 font-black sm:px-3" colSpan={5}>
+                  {frequencyLabel} Repayment
                 </td>
                 <td className="break-words px-2 py-3 font-black text-[#3A6047] sm:px-3">
-                  {currency(totalRepayment)}
+                  {currency(repaymentPerSelectedPeriod)}
                 </td>
               </tr>
             </tfoot>

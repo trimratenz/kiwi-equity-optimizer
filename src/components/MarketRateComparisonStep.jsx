@@ -51,6 +51,15 @@ export function MarketRateComparisonStep({
       </div>
       <div className="grid gap-5">
         <ResponsiveTable>
+          <colgroup>
+            <col className="w-[14%]" />
+            <col className="w-[13%]" />
+            <col className="w-[15%]" />
+            <col className="w-[14%]" />
+            <col className="w-[11%]" />
+            <col className="w-[11%]" />
+            <col className="w-[22%]" />
+          </colgroup>
           <thead className="bg-[#F7F5F0] text-xs uppercase tracking-wide text-[#7B756E]">
             <tr>
               <th className="p-3">Loan part</th>
@@ -58,44 +67,60 @@ export function MarketRateComparisonStep({
               <th className="p-3">{matchedRateLabel}</th>
               <th className="p-3">Lowest bank</th>
               <th className="p-3">Your rate</th>
-              <th className="p-3">Difference</th>
-              <th className="p-3">Repayment at shown rate</th>
+              <th className="p-3">Rate diff.</th>
+              <th className="p-3">Repayment impact</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#E2DDD5] text-[#1B2A22]">
-            {marketRateRows.map((row) => (
-              <tr key={row.id}>
-                <td className="p-3">
+            {marketRateRows.map((row) => {
+              const isRepaymentHigher = row.repaymentDifference > 0;
+              const isRepaymentSame = Math.abs(row.repaymentDifference) < 0.5;
+              const repaymentTone = isRepaymentSame
+                ? "text-[#7B756E]"
+                : isRepaymentHigher
+                  ? "text-[#C86A53]"
+                  : "text-[#3A6047]";
+
+              return (
+                <tr key={row.id}>
+                <td className="p-3 align-top">
                   <p className="font-black">Loan part {row.index}</p>
                   <p className="text-xs font-medium text-[#7B756E]">{currency(row.balance)}</p>
                 </td>
-                <td className="p-3">
+                <td className="p-3 align-top">
                   <p className="font-bold">{row.fixedTermLabel}</p>
                   <p className="text-xs font-medium text-[#7B756E]">{row.type}</p>
                 </td>
-                <td className="p-3">
+                <td className="p-3 align-top">
                   <p className="font-bold">{percent(row.marketRate)}</p>
                   <p className="text-xs font-medium text-[#7B756E]">
-                    {row.marketTerm} · {row.comparisonSource}
+                    {row.marketTerm} - {row.comparisonSource}
                   </p>
                 </td>
-                <td className="p-3">
+                <td className="p-3 align-top">
                   <p className="font-bold">{row.lowestRate === null ? "Unavailable" : percent(row.lowestRate)}</p>
                   <p className="text-xs font-medium text-[#7B756E]">{row.lowestBank}</p>
                 </td>
-                <td className="p-3">{percent(row.currentRate)}</td>
-                <td className="p-3 font-bold text-[#3A6047]">
+                <td className="p-3 align-top">{percent(row.currentRate)}</td>
+                <td className="p-3 align-top font-bold text-[#3A6047]">
                   {row.difference >= 0 ? "+" : ""}
                   {percent(row.difference)}
                 </td>
-                <td className="p-3">
-                  <p>{currency(row.marketRepayment)}</p>
+                <td className="p-3 align-top">
+                  <p className="font-bold">{currency(row.marketRepayment)}</p>
                   <p className="text-xs font-medium text-[#7B756E]">
                     Every {FREQUENCY_CONFIG[row.frequency].label}
                   </p>
+                  <p className={`mt-1 text-xs font-black ${repaymentTone}`}>
+                    {isRepaymentSame
+                      ? "No repayment change"
+                      : `${row.repaymentDifference > 0 ? "+" : ""}${currency(row.repaymentDifference)} vs your rate`}
+                  </p>
+                  <p className="text-xs font-medium text-[#7B756E]">Your current: {currency(row.currentRepayment)}</p>
                 </td>
-              </tr>
-            ))}
+                </tr>
+              );
+            })}
           </tbody>
         </ResponsiveTable>
       </div>

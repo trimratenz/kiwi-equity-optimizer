@@ -19,6 +19,7 @@ export function LoanBalanceStep({ loanBalance, hasLoanBalance, dispatch }) {
             step={10000}
             prefix="$"
             placeholder="0"
+            thousands
           />
         </Field>
       </div>

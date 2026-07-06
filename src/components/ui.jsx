@@ -1,5 +1,13 @@
 import React from "react";
 
+function formatThousands(value) {
+  const raw = String(value ?? "").replace(/,/g, "");
+  if (!raw) return "";
+  const [whole, decimal] = raw.split(".");
+  const formattedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return decimal === undefined ? formattedWhole : `${formattedWhole}.${decimal}`;
+}
+
 export function Field({ label, hint, error, children }) {
   return (
     <label className="grid gap-2 text-sm font-semibold text-[#1B2A22]">
@@ -22,8 +30,11 @@ export function NumberInput({
   prefix,
   suffix,
   placeholder = "0",
-  disabled = false
+  disabled = false,
+  thousands = false
 }) {
+  const displayValue = thousands ? formatThousands(value) : value;
+
   return (
     <div
       className={`flex h-12 items-center rounded-lg border px-3 shadow-sm transition focus-within:border-[#3A6047] focus-within:ring-2 focus-within:ring-[#3A6047]/15 ${
@@ -38,7 +49,7 @@ export function NumberInput({
         aria-valuemin={min}
         aria-valuemax={max}
         data-step={step}
-        value={value}
+        value={displayValue}
         placeholder={placeholder}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
@@ -105,9 +116,9 @@ export function StepShell({ step, title, detail, icon: Icon, children }) {
   );
 }
 
-export function Stat({ label, value, sub, icon: Icon }) {
+export function Stat({ label, value, sub, icon: Icon, className = "" }) {
   return (
-    <div className="rounded-xl border border-[#E2DDD5] bg-white p-4 shadow-[0_12px_34px_rgba(27,42,34,0.06)]">
+    <div className={`rounded-xl border border-[#E2DDD5] bg-white p-4 shadow-[0_12px_34px_rgba(27,42,34,0.06)] ${className}`}>
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs font-bold uppercase tracking-wide text-[#7B756E]">{label}</p>
         {Icon && (

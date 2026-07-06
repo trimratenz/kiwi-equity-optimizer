@@ -139,7 +139,7 @@ export function affordabilitySnapshot({ repayment, income }) {
     tone = "tight";
   } else if (safeIncome > 0) {
     band = "Stretched";
-    detail = "Consider a buffer, lower debt, or advice before re-fixing.";
+    detail = "Consider a buffer, lower debt, or human review before re-fixing.";
     tone = "stretched";
   }
 
@@ -189,6 +189,54 @@ export function calculatePayment(principal, annualRate, years, frequency = "Mont
   );
 }
 
+export function remainingPrincipalAndInterestToFixedEnd(tranches, fallbackFrequency = "Monthly") {
+  const rows = tranches.map((tranche) => {
+    const frequency = tranche.frequency || fallbackFrequency;
+    const periodsPerYear = FREQUENCY_CONFIG[frequency].periodsPerYear;
+    const remainingMonths = tranche.type === "Fixed" ? Math.max(Number(tranche.fixedMonths) || 0, 0) : 0;
+    const periodsRemaining = Math.ceil((remainingMonths / 12) * periodsPerYear);
+    const periodicRate = (Number(tranche.rate) || 0) / 100 / periodsPerYear;
+    const repayment = calculatePayment(tranche.amount, tranche.rate, tranche.termYears, frequency);
+    let balance = Math.max(Number(tranche.amount) || 0, 0);
+    let principal = 0;
+    let interest = 0;
+
+    for (let period = 0; period < periodsRemaining && balance > 0.5; period += 1) {
+      const periodInterest = balance * periodicRate;
+      const principalPaid = Math.max(0, Math.min(balance, repayment - periodInterest));
+      principal += principalPaid;
+      interest += periodInterest;
+      balance = Math.max(0, balance - principalPaid);
+    }
+
+    return {
+      id: tranche.id,
+      index: tranche.index,
+      frequency,
+      remainingMonths,
+      periodsRemaining,
+      repayment,
+      principal: Math.round(principal),
+      interest: Math.round(interest),
+      total: Math.round(principal + interest),
+      balanceAtFixedEnd: Math.round(balance)
+    };
+  });
+
+  const nextExpiryMonths = rows
+    .filter((row) => row.remainingMonths > 0)
+    .reduce((min, row) => Math.min(min, row.remainingMonths), Infinity);
+
+  return {
+    rows,
+    principal: rows.reduce((sum, row) => sum + row.principal, 0),
+    interest: rows.reduce((sum, row) => sum + row.interest, 0),
+    total: rows.reduce((sum, row) => sum + row.total, 0),
+    periodsRemaining: rows.reduce((sum, row) => sum + row.periodsRemaining, 0),
+    nextExpiryMonths: Number.isFinite(nextExpiryMonths) ? nextExpiryMonths : 0
+  };
+}
+
 export function buildRepaymentMatrix({
   principal,
   years,
@@ -218,6 +266,81 @@ export function paymentToAnnual(payment, frequency = "Monthly") {
 
 export function paymentFromAnnual(annualPayment, frequency = "Monthly") {
   return annualPayment / FREQUENCY_CONFIG[frequency].periodsPerYear;
+}
+
+export function annualIncomeFromPeriod(periodIncome, frequency = "Monthly") {
+  return Math.max(Number(periodIncome) || 0, 0) * FREQUENCY_CONFIG[frequency].periodsPerYear;
+}
+
+export function debtToIncomeRatio(totalDebt, periodIncome, frequency = "Monthly") {
+  const annualIncome = annualIncomeFromPeriod(periodIncome, frequency);
+  const safeDebt = Math.max(Number(totalDebt) || 0, 0);
+  return annualIncome > 0 ? safeDebt / annualIncome : 0;
+}
+
+export function dtiAssessment(ratio) {
+  if (!ratio) {
+    return {
+      label: "Add income",
+      detail: "Enter income to compare your debt-to-income ratio.",
+      tone: "neutral",
+      position: 0
+    };
+  }
+
+  if (ratio < 5) {
+    return {
+      label: "Comfortable",
+      detail: "Below the 5.00x watch zone used by many lenders.",
+      tone: "good",
+      position: Math.min((ratio / 7) * 100, 100)
+    };
+  }
+
+  if (ratio < 6) {
+    return {
+      label: "Watch",
+      detail: "Approaching the 6.00x owner-occupier DTI threshold.",
+      tone: "watch",
+      position: Math.min((ratio / 7) * 100, 100)
+    };
+  }
+
+  if (ratio < 7) {
+    return {
+      label: "High",
+      detail: "Above the common 6.00x owner-occupier DTI threshold.",
+      tone: "tight",
+      position: Math.min((ratio / 7) * 100, 100)
+    };
+  }
+
+  return {
+    label: "Very high",
+    detail: "Above the common 7.00x investor DTI threshold.",
+    tone: "stretched",
+    position: 100
+  };
+}
+
+export function netCashPosition({ periodIncome, standardRepayment, extraPayment = 0, outgoingCosts = 0, frequency = "Monthly" }) {
+  const incomePerPeriod = Math.max(Number(periodIncome) || 0, 0);
+  const safeStandardRepayment = Math.max(Number(standardRepayment) || 0, 0);
+  const extraPerPeriod = Math.max(Number(extraPayment) || 0, 0);
+  const safeOutgoingCosts = Math.max(Number(outgoingCosts) || 0, 0);
+  const repaymentWithExtra = safeStandardRepayment + extraPerPeriod;
+  const cashAfterRepayment = incomePerPeriod - repaymentWithExtra;
+
+  return {
+    frequency,
+    incomePerPeriod,
+    standardRepayment: safeStandardRepayment,
+    extraPerPeriod,
+    outgoingCosts: safeOutgoingCosts,
+    repaymentWithExtra,
+    remainingCash: cashAfterRepayment,
+    cashAfterOutgoings: cashAfterRepayment - safeOutgoingCosts
+  };
 }
 
 export function amortizationSeries({
@@ -522,4 +645,82 @@ export function forecastRefixRows({
       scenarios
     };
   });
+}
+
+export function buildExecutiveAdvice({
+  tranches,
+  totalDebt,
+  weightedRate,
+  primaryFrequency,
+  selectedForecastTranche,
+  selectedForecastRow,
+  selectedForecastScenario,
+  extraPayment,
+  summary,
+  periodIncome,
+  repaymentToIncome,
+  cashAfterRepayment,
+  cashAfterOutgoings,
+  marketRates = MARKET_RATE_SNAPSHOT.rates
+}) {
+  const sortedFixedTranches = [...tranches]
+    .filter((tranche) => tranche.type === "Fixed")
+    .sort((a, b) => Number(a.fixedMonths || 0) - Number(b.fixedMonths || 0));
+  const upcomingTranche = sortedFixedTranches[0] ?? selectedForecastTranche ?? tranches[0];
+  const fallbackOneYearRate = MARKET_RATE_SNAPSHOT.rates.find((rate) => rate.term === "1 year")?.rate ?? 0;
+  const oneYearRate = marketRates.find((rate) => rate.term === "1 year")?.rate ?? fallbackOneYearRate;
+  const currentOcr = selectedForecastRow?.currentOcr ?? CURRENT_OCR_ASSUMPTION;
+  const forecastOcr = selectedForecastRow?.forecastOcr ?? currentOcr;
+  const baseRepaymentChange = selectedForecastScenario?.repaymentChange ?? 0;
+  const extra = Math.max(Number(extraPayment) || 0, 0);
+  const dtiRatio = debtToIncomeRatio(totalDebt, periodIncome, primaryFrequency);
+  const dti = dtiAssessment(dtiRatio);
+  const frequencyShort = FREQUENCY_CONFIG[primaryFrequency].short;
+  const upcomingBalance = upcomingTranche?.originalBalance ?? upcomingTranche?.amount ?? 0;
+  const upcomingMonths = upcomingTranche?.fixedMonths ?? 0;
+  const blendedPremium = weightedRate - oneYearRate;
+  const surplus = Number.isFinite(cashAfterOutgoings) ? cashAfterOutgoings : 0;
+
+  const structureSentence = `${currency(totalDebt)} is split across ${tranches.length} ${
+    tranches.length === 1 ? "loan part" : "loan parts"
+  } with a weighted blended rate of ${percent(weightedRate)}, which is ${
+    blendedPremium >= 0 ? `${percent(blendedPremium)} above` : `${percent(Math.abs(blendedPremium))} below`
+  } the current 1-year market average used in this calculator (${percent(oneYearRate)}).`;
+  const expirySentence = `The next fixed-term date shown is Part ${upcomingTranche?.index ?? 1}, with ${currency(
+    upcomingBalance
+  )} expiring in ${monthsLabel(upcomingMonths)}; the forecast view uses an OCR path from ${percent(currentOcr)} to ${percent(
+    forecastOcr
+  )} and estimates a base-case repayment change of ${baseRepaymentChange >= 0 ? "+" : ""}${currency(
+    baseRepaymentChange
+  )}/${frequencyShort}.`;
+  const cashFlowSentence =
+    surplus > 0
+      ? `Based on the income and outgoing costs entered, the calculator shows ${currency(
+          cashAfterRepayment
+        )}/${frequencyShort} remaining after repayments and ${currency(surplus)}/${frequencyShort} remaining after declared outgoings, with a DTI estimate of ${dtiRatio.toFixed(
+          2
+        )}x.`
+      : `Based on the income and outgoing costs entered, the calculator shows ${currency(
+          cashAfterRepayment
+        )}/${frequencyShort} remaining after repayments and ${currency(surplus)}/${frequencyShort} remaining after declared outgoings, with a DTI estimate of ${dtiRatio.toFixed(
+          2
+        )}x.`;
+
+  return {
+    bullets: [
+      { label: "Loan structure", copy: structureSentence },
+      { label: "Next fixed-term date", copy: expirySentence },
+      { label: "Cash-flow snapshot", copy: cashFlowSentence }
+    ],
+    closingSentence:
+      "This is a calculator summary only, not financial advice; speak with a licensed mortgage adviser before making lending, refinancing, or re-fixing decisions.",
+    dtiRatio,
+    dti,
+    extraImpact:
+      extra > 0
+        ? `Optional top-up model: ${currency(extra)}/${frequencyShort} could save ${currency(
+            summary.interestSaved
+          )} and shorten the loan by ${yearsAndMonths(summary.timeSavedPeriods, primaryFrequency)}.`
+        : ""
+  };
 }

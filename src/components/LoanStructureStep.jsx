@@ -80,6 +80,7 @@ export function LoanStructureStep({
                         step={5000}
                         prefix="$"
                         placeholder="0"
+                        thousands
                       />
                     </Field>
                   )}
@@ -135,7 +136,7 @@ export function LoanStructureStep({
                     <Field label="Fixed term">
                       <Segmented
                         value={tranche.fixedTermMonths || "12"}
-                        onChange={(value) => updateTranche(tranche.id, { fixedTermMonths: value })}
+                        onChange={(value) => updateTranche(tranche.id, { fixedTermMonths: value, fixedMonths: value })}
                         options={FIXED_TERM_OPTIONS.map((option) => ({
                           value: String(option.months),
                           label: option.label
@@ -151,9 +152,13 @@ export function LoanStructureStep({
                         onChange={(value) => updateTranche(tranche.id, { offsetBalance: value })}
                         step={1000}
                         prefix="$"
+                        thousands
                       />
                     </Field>
-                    <Field label="Fixed ends in" hint={tranche.type === "Variable" ? "N/A" : undefined}>
+                    <Field
+                      label="Fixed ends in"
+                      hint={tranche.type === "Variable" ? "N/A" : "Defaults from fixed term"}
+                    >
                       <NumberInput
                         value={tranche.fixedMonths}
                         onChange={(value) => updateTranche(tranche.id, { fixedMonths: value })}

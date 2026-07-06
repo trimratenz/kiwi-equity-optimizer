@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useReducer, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { AlertTriangle, Banknote, CalendarClock, Home, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { Banknote, CalendarClock, Home, RefreshCw, SlidersHorizontal } from "lucide-react";
 import "./index.css";
 import { LoanBalanceStep } from "./components/LoanBalanceStep";
+import { ExecutiveSummaryLeadStep } from "./components/ExecutiveSummaryLeadStep";
 import { LoanStructureStep } from "./components/LoanStructureStep";
 import { MarketRateComparisonStep } from "./components/MarketRateComparisonStep";
 import { OptimizationStep } from "./components/OptimizationStep";
@@ -12,12 +13,17 @@ import { Stat } from "./components/ui";
 import {
   FREQUENCY_CONFIG,
   MARKET_RATE_SNAPSHOT,
+  buildExecutiveAdvice,
   calculatePayment,
   currency,
+  dtiAssessment,
+  debtToIncomeRatio,
   forecastRefixRows,
   marketTermMonths,
+  netCashPosition,
   monthsLabel,
   percent,
+  remainingPrincipalAndInterestToFixedEnd,
   summarizeLoan,
   trancheRows,
   weightedLoanSnapshot
@@ -38,6 +44,8 @@ function getStoredMortgageFormState() {
     return {
       ...initialState,
       ...parsed,
+      extraPayment: parsed.extraPayment === "100" ? "" : parsed.extraPayment ?? initialState.extraPayment,
+      outgoingCosts: parsed.outgoingCosts ?? initialState.outgoingCosts,
       tranches: Array.isArray(parsed.tranches) && parsed.tranches.length > 0 ? parsed.tranches : initialState.tranches
     };
   } catch {
@@ -60,7 +68,7 @@ function App() {
     status: "idle",
     error: ""
   });
-  const { loanBalance, loanStructure, salaryIncome, extraPayment, interestOnlyYears, tranches } = formState;
+  const { loanBalance, loanStructure, salaryIncome, extraPayment, outgoingCosts, interestOnlyYears, tranches } = formState;
 
   useEffect(() => {
     window.localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(formState));
@@ -216,7 +224,10 @@ function App() {
   const selectedForecastRow =
     forecastRows.find((row) => row.months === selectedForecastTermMonths) ?? forecastRows.find((row) => row.months === 12) ?? forecastRows[0];
   const selectedForecastScenario = selectedForecastRow?.scenarios.find((scenario) => scenario.key === "base") ?? selectedForecastRow?.scenarios[0];
-  const paymentDelta = selectedForecastScenario ? selectedForecastScenario.repaymentChange : 0;
+  const remainingFixedPayments = useMemo(
+    () => remainingPrincipalAndInterestToFixedEnd(forecastTranches, primaryFrequency),
+    [forecastTranches, primaryFrequency]
+  );
   const tranchesWithPayments = useMemo(() => trancheRows(mathTranches, primaryFrequency), [mathTranches, primaryFrequency]);
   const payoffRows = summary.standard.rows.map((row, index) => ({
     year: row.year,
@@ -224,6 +235,56 @@ function App() {
     fasterDebt: summary.accelerated.rows[index]?.debt ?? summary.accelerated.rows.at(-1)?.debt ?? 0
   }));
   const salaryAmount = toPositive(salaryIncome);
+  const outgoingAmount = toPositive(outgoingCosts);
+  const repaymentToIncome = salaryAmount > 0 ? (summary.repayment / salaryAmount) * 100 : 0;
+  const netCash = useMemo(
+    () =>
+      netCashPosition({
+        periodIncome: salaryAmount,
+        standardRepayment: summary.repayment,
+        extraPayment: toPositive(extraPayment),
+        outgoingCosts: outgoingAmount,
+        frequency: primaryFrequency
+      }),
+    [salaryAmount, summary.repayment, extraPayment, outgoingAmount, primaryFrequency]
+  );
+  const dtiRatio = debtToIncomeRatio(loanAmount, salaryAmount, primaryFrequency);
+  const dti = dtiAssessment(dtiRatio);
+  const executiveAdvice = useMemo(
+    () =>
+      buildExecutiveAdvice({
+        tranches: forecastTranches,
+        totalDebt: loanAmount,
+        weightedRate: modelRate,
+        primaryFrequency,
+        selectedForecastTranche,
+        selectedForecastRow,
+        selectedForecastScenario,
+        extraPayment: toPositive(extraPayment),
+        summary,
+        periodIncome: salaryAmount,
+        repaymentToIncome,
+        cashAfterRepayment: netCash.remainingCash,
+        cashAfterOutgoings: netCash.cashAfterOutgoings,
+        marketRates: marketRates.rates
+      }),
+    [
+      forecastTranches,
+      loanAmount,
+      modelRate,
+      primaryFrequency,
+      selectedForecastTranche,
+      selectedForecastRow,
+      selectedForecastScenario,
+      extraPayment,
+      summary,
+      salaryAmount,
+      repaymentToIncome,
+      netCash.remainingCash,
+      netCash.cashAfterOutgoings,
+      marketRates.rates
+    ]
+  );
   const marketBankOptions = useMemo(() => {
     const bankMap = new Map();
     marketRates.rawRecords.forEach((record) => {
@@ -254,6 +315,7 @@ function App() {
     const comparisonSource = selectedBankRate?.institution ?? "5-bank average";
     const marketRepayment = calculatePayment(tranche.amount, comparisonRate, tranche.termYears, tranche.frequency);
     const currentRepayment = calculatePayment(tranche.amount, tranche.rate, tranche.termYears, tranche.frequency);
+    const repaymentDifference = marketRepayment - currentRepayment;
 
     return {
       id: tranche.id,
@@ -270,9 +332,79 @@ function App() {
       currentRate: tranche.rate,
       difference: tranche.rate ? tranche.rate - comparisonRate : 0,
       currentRepayment,
-      marketRepayment
+      marketRepayment,
+      repaymentDifference
     };
   });
+  const serializedMortgageState = useMemo(
+    () => ({
+      steps: {
+        loanBalance: {
+          loanBalance,
+          loanAmount,
+          effectiveLoan
+        },
+        loanStructure: {
+          loanStructure,
+          tranches: normalizedTranches,
+          offsetAdjustedTranches: mathTranches,
+          splitMatches
+        },
+        repaymentSummary: {
+          periodIncome: salaryAmount,
+          incomeFrequency: primaryFrequency,
+          weightedRate: modelRate,
+          weightedTermYears: modelYears,
+          primaryFrequency,
+          remainingFixedPayments,
+          summary
+        },
+        marketComparison: {
+          selectedMarketBankId,
+          marketRateRows
+        },
+        rolloverForecast: {
+          selectedForecastTrancheId,
+          selectedForecastTermMonths,
+          selectedForecastRow,
+          selectedForecastScenario
+        },
+        optimization: {
+          extraPayment: toPositive(extraPayment),
+          outgoingCosts: outgoingAmount,
+          interestOnlyYears: toPositive(interestOnlyYears),
+          netCash
+        }
+      },
+      rawFormState: formState
+    }),
+    [
+      loanBalance,
+      loanAmount,
+      effectiveLoan,
+      loanStructure,
+      normalizedTranches,
+      mathTranches,
+      splitMatches,
+      salaryAmount,
+      modelRate,
+      modelYears,
+      primaryFrequency,
+      summary,
+      selectedMarketBankId,
+      marketRateRows,
+      selectedForecastTrancheId,
+      selectedForecastTermMonths,
+      selectedForecastRow,
+      selectedForecastScenario,
+      remainingFixedPayments,
+      extraPayment,
+      outgoingAmount,
+      interestOnlyYears,
+      netCash,
+      formState
+    ]
+  );
 
   function updateTranche(id, patch) {
     Object.entries(patch).forEach(([field, value]) => {
@@ -305,6 +437,11 @@ function App() {
 
   function resetTool() {
     dispatch({ type: "RESET" });
+  }
+
+  function handleLeadCapture(payload) {
+    window.dispatchEvent(new CustomEvent("trimrate:lead-capture", { detail: payload }));
+    console.info("TrimRate tailored review requested", payload);
   }
 
   return (
@@ -356,7 +493,7 @@ function App() {
           <section className="space-y-5">
             <div className="grid gap-3 md:grid-cols-4">
               <Stat
-                label={`${FREQUENCY_CONFIG[primaryFrequency].label} repayment`}
+                label={`${primaryFrequency} Repayment`}
                 value={currency(summary.repayment)}
                 sub={`At blended ${percent(modelRate)} over ${modelYears} years`}
                 icon={Banknote}
@@ -364,12 +501,12 @@ function App() {
               <Stat label="Effective balance" value={currency(effectiveLoan)} sub="After offset/redraw" icon={SlidersHorizontal} />
               <Stat label="Interest you'll pay" value={currency(summary.totalInterest)} sub="Current schedule" icon={CalendarClock} />
               <Stat
-                label="Next forecast re-fix"
-                value={`${paymentDelta >= 0 ? "+" : ""}${currency(paymentDelta)}`}
-                sub={`${selectedForecastTranche ? `Loan part ${selectedForecastTranche.index}` : "Loan"} at ${
-                  selectedForecastRow?.refixPointLabel ?? "re-fix"
-                }: ${percent(selectedForecastScenario?.forecastMortgageRate ?? 0)}`}
-                icon={AlertTriangle}
+                label="Remaining P&I to fixed end"
+                value={currency(remainingFixedPayments.total)}
+                sub={`${currency(remainingFixedPayments.principal)} principal + ${currency(
+                  remainingFixedPayments.interest
+                )} interest across ${remainingFixedPayments.periodsRemaining} scheduled repayments`}
+                icon={CalendarClock}
               />
             </div>
 
@@ -380,6 +517,8 @@ function App() {
               modelYears={modelYears}
               salaryIncome={salaryIncome}
               salaryAmount={salaryAmount}
+              dtiRatio={dtiRatio}
+              dti={dti}
               tranchesWithPayments={tranchesWithPayments}
               dispatch={dispatch}
             />
@@ -406,12 +545,20 @@ function App() {
 
             <OptimizationStep
               extraPayment={extraPayment}
+              outgoingCosts={outgoingCosts}
               interestOnlyYears={interestOnlyYears}
               payoffRows={payoffRows}
               primaryFrequency={primaryFrequency}
+              netCash={netCash}
               summary={summary}
               dispatch={dispatch}
               nudgeExtra={nudgeExtra}
+            />
+
+            <ExecutiveSummaryLeadStep
+              advice={executiveAdvice}
+              serializedState={serializedMortgageState}
+              onSubmitLead={handleLeadCapture}
             />
           </section>
         )}
