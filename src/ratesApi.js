@@ -1,4 +1,11 @@
-import { MARKET_RATE_SNAPSHOT, marketTermMonths } from "./financialModel";
+import {
+  DEFAULT_BANK_RATE_SNAPSHOT,
+  USER_RATE_DATA_NOTICE,
+  buildBankRateSnapshotView,
+  createBankRateSnapshot,
+  termFromMonths,
+  termFromLabel
+} from "./snapshotLayer.js";
 
 export const RATES_API_BASE_URL = "https://ratesapi.nz";
 export const MORTGAGE_RATES_ENDPOINT = `${RATES_API_BASE_URL}/api/v1/mortgage-rates`;
@@ -122,44 +129,35 @@ function extractMajorBankRecords(payload) {
 
 export function normalizeMortgageRatesResponse(payload) {
   const records = extractMajorBankRecords(payload);
-  const grouped = new Map();
-
-  records.forEach((record) => {
-    const group = grouped.get(record.termInMonths) ?? [];
-    group.push(record);
-    grouped.set(record.termInMonths, group);
+  const captured = String(payload?.lastUpdated || payload?.timestamp || new Date().toISOString()).slice(0, 10);
+  const liveSnapshot = createBankRateSnapshot({
+    id: `rates-api-5-bank-${captured}`,
+    source: "Rates API Five-bank average",
+    capturedAt: captured,
+    status: "live",
+    note: USER_RATE_DATA_NOTICE,
+    records: records.map((record) => ({
+      ...record,
+      termKey: termFromMonths(record.termInMonths)?.key
+    }))
   });
-
-  const liveRates = TARGET_TERMS.map((termInMonths) => {
-    const rates = grouped.get(termInMonths) ?? [];
-    if (rates.length === 0) return null;
-    const average = rates.reduce((sum, record) => sum + record.rate, 0) / rates.length;
-
-    return {
-      term: TERM_LABELS.get(termInMonths),
-      rate: Number(average.toFixed(2)),
-      termInMonths,
-      lenderCount: new Set(rates.map((record) => record.institution)).size,
-      banks: rates.map((record) => record.institution)
-    };
-  }).filter(Boolean);
+  const view = buildBankRateSnapshotView(mergeSnapshotRecordsWithFallback(liveSnapshot));
 
   return {
-    rates: mergeLiveRatesWithFallback(liveRates),
-    captured: String(payload?.lastUpdated || payload?.timestamp || new Date().toISOString()).slice(0, 10),
-    source: "Rates API 5-bank average",
-    note:
-      "Rates API refreshes the current mortgage-rate feed and TrimRate averages ANZ, ASB, BNZ, Kiwibank, and Westpac by term. Confirm your final rate directly with the lender before re-fixing.",
+    ...view,
     status: "live",
     termsOfUse: payload?.termsOfUse,
     rawRecords: records
   };
 }
 
-function mergeLiveRatesWithFallback(liveRates) {
-  return MARKET_RATE_SNAPSHOT.rates.map((fallbackRate) => {
-    const liveRate = liveRates.find((rate) => rate.termInMonths === marketTermMonths(fallbackRate.term));
-    return liveRate ?? fallbackRate;
+function mergeSnapshotRecordsWithFallback(liveSnapshot) {
+  const liveMonths = new Set(liveSnapshot.records.map((record) => record.termInMonths));
+  const fallbackRecords = DEFAULT_BANK_RATE_SNAPSHOT.records.filter((record) => !liveMonths.has(record.termInMonths));
+
+  return createBankRateSnapshot({
+    ...liveSnapshot,
+    records: [...liveSnapshot.records, ...fallbackRecords.map((record) => ({ ...record, termKey: termFromLabel(record.term)?.key }))]
   });
 }
 

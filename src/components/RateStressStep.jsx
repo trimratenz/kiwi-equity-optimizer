@@ -1,14 +1,12 @@
 import React from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import {
-  CURRENT_OCR_ASSUMPTION,
   FREQUENCY_CONFIG,
-  OCR_FORECAST_SOURCES,
-  RBNZ_OCR_FORECAST_SOURCE,
   currency,
   monthsLabel,
   percent
 } from "../financialModel";
+import { USER_RATE_DATA_NOTICE } from "../snapshotLayer.js";
 import { Segmented, Stat, StepShell } from "./ui";
 
 export function RateStressStep({
@@ -18,15 +16,17 @@ export function RateStressStep({
   selectedForecastTrancheId,
   selectedForecastFrequency,
   selectedForecastPayment,
+  selectedForecastRow,
+  scenarioLabel,
   selectedForecastTermMonths,
   setSelectedForecastTermMonths,
   setSelectedForecastTrancheId
 }) {
-  const firstForecast = forecastRows[0];
   const selectedTerm =
+    selectedForecastRow ??
     forecastRows.find((row) => row.months === selectedForecastTermMonths) ??
     forecastRows.find((row) => row.months === 12) ??
-    firstForecast;
+    forecastRows[0];
 
   return (
     <StepShell
@@ -77,7 +77,7 @@ export function RateStressStep({
             />
             <Stat
               label="Balance at re-fix"
-              value={currency(firstForecast?.remainingBalance ?? selectedForecastTranche.amount)}
+              value={currency(selectedTerm?.remainingBalance ?? selectedForecastTranche.amount)}
               sub={`Projected from the user's current balance`}
             />
             <Stat
@@ -92,12 +92,15 @@ export function RateStressStep({
           <article className="rounded-xl border border-[#E2DDD5] bg-white p-5 shadow-[0_12px_34px_rgba(27,42,34,0.06)]">
             <div className="grid gap-5">
               <div>
-                <p className="text-xs font-black uppercase tracking-wide text-[#7B756E]">Selected re-fix view</p>
+                <p className="text-xs font-black uppercase tracking-wide text-[#7B756E]">Selected re-fix scenario</p>
+                <p className="mt-1 text-sm font-black text-[#3A6047]">
+                  Showing scenario for {scenarioLabel ?? "Loan details"}
+                </p>
                 <h3 className="mt-2 text-2xl font-black text-[#1B2A22]">
                   {selectedTerm.label} fixed in {selectedTerm.refixPointLabel}
                 </h3>
                 <p className="mt-1 text-sm font-medium leading-6 text-[#7B756E]">
-                  RBNZ OCR forecast at that point is {percent(selectedTerm.forecastOcr)}. Current 5-bank average for a{" "}
+                  RBNZ OCR forecast at that point is {percent(selectedTerm.forecastOcr)}. Current Five-bank average for a{" "}
                   {selectedTerm.label} fixed rate is {percent(selectedTerm.marketRateToday)}.
                 </p>
               </div>
@@ -127,8 +130,8 @@ export function RateStressStep({
               </div>
               <div className="rounded-lg border border-[#E2DDD5] bg-[#F7F5F0] p-4 text-sm leading-6 text-[#7B756E]">
                 <p>
-                  OCR path used: {percent(CURRENT_OCR_ASSUMPTION)} today to {percent(selectedTerm.forecastOcr)} at
-                  re-fix. Source: {RBNZ_OCR_FORECAST_SOURCE.source}.
+                  OCR snapshot: {selectedTerm.forecastSource}, last refreshed {selectedTerm.ocrLastRefreshed}. Current OCR
+                  {percent(selectedTerm.currentOcr)} to {percent(selectedTerm.forecastOcr)} at re-fix.
                 </p>
               </div>
             </div>
@@ -136,48 +139,11 @@ export function RateStressStep({
         )}
 
         <div className="grid gap-3 rounded-lg bg-[#F7F5F0] p-4 text-sm leading-6 text-[#7B756E] md:grid-cols-[1fr_auto] md:items-center">
-          <p>
-            Forecast values come from the local RBNZ OCR track in src/financialModel.js. Update{" "}
-            <span className="font-bold text-[#1B2A22]">CURRENT_OCR_ASSUMPTION</span> and{" "}
-            <span className="font-bold text-[#1B2A22]">RBNZ_OCR_FORECAST_SOURCE</span> after each RBNZ Monetary Policy
-            Statement.
-          </p>
+          <p>{USER_RATE_DATA_NOTICE}</p>
           <div className="inline-flex items-center gap-2 rounded-lg border border-[#E2DDD5] bg-white px-3 py-2 text-xs font-black uppercase tracking-wide text-[#3A6047]">
             <RefreshCw size={14} aria-hidden="true" />
-            Feed-ready
+            Snapshot-based
           </div>
-        </div>
-
-        <div className="grid gap-2 sm:grid-cols-2">
-          {OCR_FORECAST_SOURCES.map((source) =>
-            source.url.startsWith("http") ? (
-              <React.Fragment key={source.source}>
-                <a
-                  href={source.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-lg border border-[#E2DDD5] bg-white px-4 py-3 text-sm font-bold text-[#1B2A22] hover:border-[#3A6047]/60"
-                >
-                  {source.source}
-                </a>
-                <a
-                  href={source.publicationsUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-lg border border-[#E2DDD5] bg-white px-4 py-3 text-sm font-bold text-[#1B2A22] hover:border-[#3A6047]/60"
-                >
-                  RBNZ publications library
-                </a>
-              </React.Fragment>
-            ) : (
-              <div
-                key={source.source}
-                className="rounded-lg border border-[#E2DDD5] bg-white px-4 py-3 text-sm font-bold text-[#1B2A22]"
-              >
-                {source.source}
-              </div>
-            )
-          )}
         </div>
       </div>
     </StepShell>

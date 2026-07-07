@@ -7,7 +7,7 @@ export function LoanBalanceStep({ loanBalance, hasLoanBalance, dispatch }) {
       <p className="text-xs font-black uppercase tracking-wide text-[#3A6047]">Step 1</p>
       <div className="mt-2 grid gap-5 lg:grid-cols-[1fr_340px] lg:items-end">
         <div>
-          <h2 className="text-3xl font-black text-[#1B2A22] sm:text-4xl">How much loan do you have?</h2>
+          <h2 className="text-3xl font-black text-[#1B2A22] sm:text-4xl">How much do you owe?</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[#7B756E]">
             Start with the total amount owed. The next card lets you split that loan into fixed and variable parts.
           </p>

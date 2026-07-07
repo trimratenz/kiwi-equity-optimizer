@@ -19,8 +19,8 @@ export function OptimizationStep({
     <StepShell
       step="Step 6"
       icon={PiggyBank}
-      title="How can I improve this?"
-      detail="Make one controlled change at a time: extra repayments, interest-only period, or loan structure."
+      title="What changes could improve the numbers?"
+      detail="Model one controlled change at a time: extra repayments, interest-only period, or loan structure."
     >
       <div className="grid gap-5 xl:grid-cols-[360px_1fr]">
         <div className="grid content-start gap-4">

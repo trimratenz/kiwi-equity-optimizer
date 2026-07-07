@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useReducer, useState } from "react";
+import React, { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Banknote, CalendarClock, Home, RefreshCw, SlidersHorizontal } from "lucide-react";
 import "./index.css";
+import { submitLeadPayload, trackCalculatorRun, trackEvent } from "./analyticsClient";
 import { LoanBalanceStep } from "./components/LoanBalanceStep";
 import { ExecutiveSummaryLeadStep } from "./components/ExecutiveSummaryLeadStep";
 import { LoanStructureStep } from "./components/LoanStructureStep";
@@ -13,23 +14,26 @@ import { Stat } from "./components/ui";
 import {
   FREQUENCY_CONFIG,
   MARKET_RATE_SNAPSHOT,
-  buildExecutiveAdvice,
-  calculatePayment,
+  buildPlainEnglishSummary,
+  buildRefixScenarioView,
+  calculateLoanPartRepayment,
   currency,
   dtiAssessment,
   debtToIncomeRatio,
-  forecastRefixRows,
   marketTermMonths,
   netCashPosition,
   monthsLabel,
   percent,
+  repaymentToIncomeRatio,
   remainingPrincipalAndInterestToFixedEnd,
-  summarizeLoan,
+  summarizeMortgage,
   trancheRows,
   weightedLoanSnapshot
 } from "./financialModel";
 import { getInitialMortgageFormState, mortgageFormReducer, toNumber, toPositive } from "./mortgageFormState";
 import { fetchMortgageRates } from "./ratesApi";
+import { DEFAULT_OCR_FORECAST_SNAPSHOT, createCalculationRun } from "./snapshotLayer.js";
+import { buildSummaryPayload, monthlyEquivalent } from "./summaryPayload.js";
 
 const FORM_STORAGE_KEY = "trimratenz-form";
 
@@ -58,6 +62,7 @@ function App() {
   const [selectedForecastTrancheId, setSelectedForecastTrancheId] = useState("");
   const [selectedForecastTermMonths, setSelectedForecastTermMonths] = useState(12);
   const [selectedMarketBankId, setSelectedMarketBankId] = useState("");
+  const trackedEvents = useRef(new Set());
   const [marketRates, setMarketRates] = useState({
     rates: MARKET_RATE_SNAPSHOT.rates,
     rawRecords: [],
@@ -65,6 +70,9 @@ function App() {
     source: MARKET_RATE_SNAPSHOT.source,
     note: MARKET_RATE_SNAPSHOT.note,
     url: MARKET_RATE_SNAPSHOT.url,
+    snapshotId: MARKET_RATE_SNAPSHOT.snapshotId,
+    lastRefreshed: MARKET_RATE_SNAPSHOT.lastRefreshed,
+    warnings: MARKET_RATE_SNAPSHOT.warnings,
     status: "idle",
     error: ""
   });
@@ -73,6 +81,10 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(formState));
   }, [formState]);
+
+  useEffect(() => {
+    trackOnce(trackedEvents, "page_view");
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -91,6 +103,9 @@ function App() {
           source: result.source,
           note: result.note,
           url: "",
+          snapshotId: result.snapshotId,
+          lastRefreshed: result.lastRefreshed,
+          warnings: result.warnings,
           status: "live",
           error: ""
         });
@@ -104,6 +119,9 @@ function App() {
           source: MARKET_RATE_SNAPSHOT.source,
           note: `${MARKET_RATE_SNAPSHOT.note} Live rate refresh unavailable: ${error.message}.`,
           url: MARKET_RATE_SNAPSHOT.url,
+          snapshotId: MARKET_RATE_SNAPSHOT.snapshotId,
+          lastRefreshed: MARKET_RATE_SNAPSHOT.lastRefreshed,
+          warnings: MARKET_RATE_SNAPSHOT.warnings,
           status: "fallback",
           error: error.message
         });
@@ -116,6 +134,12 @@ function App() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    (marketRates.warnings || []).forEach((warning) => {
+      console.warn("TrimRate data warning", warning);
+    });
+  }, [marketRates.warnings]);
 
   const loanAmount = toPositive(loanBalance);
   const isSplitLoan = loanStructure === "split";
@@ -166,7 +190,25 @@ function App() {
   const modelRate = loan.weightedRate || 0;
   const modelYears = Math.max(1, Math.round(loan.weightedTerm || 30));
   const primaryFrequency = normalizedTranches[0]?.frequency || "Monthly";
-  const currentPayment = calculatePayment(effectiveLoan, modelRate, modelYears, primaryFrequency);
+  const repaymentFrequencies = useMemo(
+    () => [...new Set(normalizedTranches.map((tranche) => tranche.frequency).filter(Boolean))],
+    [normalizedTranches]
+  );
+  const hasMixedRepaymentFrequencies = repaymentFrequencies.length > 1;
+  const repaymentFrequencyLabel = hasMixedRepaymentFrequencies ? `${primaryFrequency} Equivalent` : primaryFrequency;
+  const repaymentFrequencyNote = hasMixedRepaymentFrequencies
+    ? `Annualised from ${repaymentFrequencies.join(" + ")} loan-part repayments`
+    : `Summed loan-part schedules; weighted rate ${percent(modelRate)}`;
+  const summary = useMemo(
+    () =>
+      summarizeMortgage({
+        tranches: mathTranches,
+        displayFrequency: primaryFrequency,
+        extraPayment: toPositive(extraPayment),
+        interestOnlyYears: toPositive(interestOnlyYears)
+      }),
+    [mathTranches, primaryFrequency, extraPayment, interestOnlyYears]
+  );
   const forecastTranches = useMemo(
     () =>
       mathTranches.map((tranche, index) => ({
@@ -178,52 +220,50 @@ function App() {
       })),
     [mathTranches, normalizedTranches]
   );
-  const selectedForecastTranche = forecastTranches.find((tranche) => tranche.id === selectedForecastTrancheId) ?? forecastTranches[0];
-  const selectedForecastFrequency = selectedForecastTranche?.frequency || primaryFrequency;
-  const selectedForecastPayment = selectedForecastTranche
-    ? calculatePayment(
-        selectedForecastTranche.amount,
-        selectedForecastTranche.rate,
-        selectedForecastTranche.termYears,
-        selectedForecastFrequency
-      )
-    : currentPayment;
-  const summary = useMemo(
+  const refixScenarioView = useMemo(
     () =>
-      summarizeLoan({
-        principal: effectiveLoan,
-        annualRate: modelRate,
-        years: modelYears,
-        frequency: primaryFrequency,
-        extraPayment: toPositive(extraPayment),
-        interestOnlyYears: toPositive(interestOnlyYears)
-      }),
-    [effectiveLoan, modelRate, modelYears, primaryFrequency, extraPayment, interestOnlyYears]
-  );
-  const forecastRows = useMemo(
-    () =>
-      forecastRefixRows({
-        principal: selectedForecastTranche?.amount ?? effectiveLoan,
-        currentRate: selectedForecastTranche?.rate ?? modelRate,
-        years: selectedForecastTranche?.termYears ?? modelYears,
-        frequency: selectedForecastFrequency,
-        currentPayment: selectedForecastPayment,
-        fixedEndsInMonths: selectedForecastTranche?.fixedMonths ?? 0,
-        marketRates: marketRates.rates
+      buildRefixScenarioView({
+        tranches: forecastTranches,
+        selectedTrancheId: selectedForecastTrancheId,
+        selectedTermMonths: selectedForecastTermMonths,
+        fallbackFrequency: primaryFrequency,
+        fallbackPrincipal: effectiveLoan,
+        fallbackRate: modelRate,
+        fallbackYears: modelYears,
+        marketRates: marketRates.rates,
+        bankRateSnapshotId: marketRates.snapshotId,
+        ocrSnapshot: DEFAULT_OCR_FORECAST_SNAPSHOT
       }),
     [
+      forecastTranches,
+      selectedForecastTrancheId,
+      selectedForecastTermMonths,
+      primaryFrequency,
       effectiveLoan,
       modelRate,
       modelYears,
-      selectedForecastFrequency,
-      selectedForecastPayment,
-      selectedForecastTranche,
-      marketRates.rates
+      marketRates.rates,
+      marketRates.snapshotId
     ]
   );
-  const selectedForecastRow =
-    forecastRows.find((row) => row.months === selectedForecastTermMonths) ?? forecastRows.find((row) => row.months === 12) ?? forecastRows[0];
-  const selectedForecastScenario = selectedForecastRow?.scenarios.find((scenario) => scenario.key === "base") ?? selectedForecastRow?.scenarios[0];
+  const {
+    forecastRows,
+    selectedForecastTranche,
+    selectedForecastFrequency,
+    selectedForecastPayment,
+    selectedForecastRow,
+    selectedForecastScenario
+  } = refixScenarioView;
+  useEffect(() => {
+    if (refixScenarioView.selectedForecastTrancheId && selectedForecastTrancheId !== refixScenarioView.selectedForecastTrancheId) {
+      setSelectedForecastTrancheId(refixScenarioView.selectedForecastTrancheId);
+    }
+  }, [refixScenarioView.selectedForecastTrancheId, selectedForecastTrancheId]);
+  useEffect(() => {
+    if (selectedForecastTermMonths !== refixScenarioView.selectedForecastTermMonths) {
+      setSelectedForecastTermMonths(refixScenarioView.selectedForecastTermMonths);
+    }
+  }, [refixScenarioView.selectedForecastTermMonths, selectedForecastTermMonths]);
   const remainingFixedPayments = useMemo(
     () => remainingPrincipalAndInterestToFixedEnd(forecastTranches, primaryFrequency),
     [forecastTranches, primaryFrequency]
@@ -236,7 +276,7 @@ function App() {
   }));
   const salaryAmount = toPositive(salaryIncome);
   const outgoingAmount = toPositive(outgoingCosts);
-  const repaymentToIncome = salaryAmount > 0 ? (summary.repayment / salaryAmount) * 100 : 0;
+  const repaymentToIncome = repaymentToIncomeRatio(summary.repayment, salaryAmount);
   const netCash = useMemo(
     () =>
       netCashPosition({
@@ -250,41 +290,6 @@ function App() {
   );
   const dtiRatio = debtToIncomeRatio(loanAmount, salaryAmount, primaryFrequency);
   const dti = dtiAssessment(dtiRatio);
-  const executiveAdvice = useMemo(
-    () =>
-      buildExecutiveAdvice({
-        tranches: forecastTranches,
-        totalDebt: loanAmount,
-        weightedRate: modelRate,
-        primaryFrequency,
-        selectedForecastTranche,
-        selectedForecastRow,
-        selectedForecastScenario,
-        extraPayment: toPositive(extraPayment),
-        summary,
-        periodIncome: salaryAmount,
-        repaymentToIncome,
-        cashAfterRepayment: netCash.remainingCash,
-        cashAfterOutgoings: netCash.cashAfterOutgoings,
-        marketRates: marketRates.rates
-      }),
-    [
-      forecastTranches,
-      loanAmount,
-      modelRate,
-      primaryFrequency,
-      selectedForecastTranche,
-      selectedForecastRow,
-      selectedForecastScenario,
-      extraPayment,
-      summary,
-      salaryAmount,
-      repaymentToIncome,
-      netCash.remainingCash,
-      netCash.cashAfterOutgoings,
-      marketRates.rates
-    ]
-  );
   const marketBankOptions = useMemo(() => {
     const bankMap = new Map();
     marketRates.rawRecords.forEach((record) => {
@@ -312,9 +317,9 @@ function App() {
       .filter((record) => record.termInMonths === matchedMonths)
       .sort((a, b) => a.rate - b.rate)[0];
     const comparisonRate = selectedBankRate?.rate ?? closestRate.rate;
-    const comparisonSource = selectedBankRate?.institution ?? "5-bank average";
-    const marketRepayment = calculatePayment(tranche.amount, comparisonRate, tranche.termYears, tranche.frequency);
-    const currentRepayment = calculatePayment(tranche.amount, tranche.rate, tranche.termYears, tranche.frequency);
+    const comparisonSource = selectedBankRate?.institution ?? "Five-bank average";
+    const marketRepayment = calculateLoanPartRepayment({ ...tranche, rate: comparisonRate }, tranche.frequency);
+    const currentRepayment = calculateLoanPartRepayment(tranche, tranche.frequency);
     const repaymentDifference = marketRepayment - currentRepayment;
 
     return {
@@ -336,6 +341,41 @@ function App() {
       repaymentDifference
     };
   });
+  const summaryContent = useMemo(
+    () =>
+      buildPlainEnglishSummary({
+        tranches: forecastTranches,
+        totalDebt: loanAmount,
+        weightedRate: modelRate,
+        primaryFrequency,
+        selectedForecastTranche,
+        selectedForecastRow,
+        selectedForecastScenario,
+        extraPayment: toPositive(extraPayment),
+        summary,
+        periodIncome: salaryAmount,
+        repaymentToIncome,
+        cashAfterRepayment: netCash.remainingCash,
+        cashAfterOutgoings: netCash.cashAfterOutgoings,
+        marketRateRows
+      }),
+    [
+      forecastTranches,
+      loanAmount,
+      modelRate,
+      primaryFrequency,
+      selectedForecastTranche,
+      selectedForecastRow,
+      selectedForecastScenario,
+      extraPayment,
+      summary,
+      salaryAmount,
+      repaymentToIncome,
+      netCash.remainingCash,
+      netCash.cashAfterOutgoings,
+      marketRateRows
+    ]
+  );
   const serializedMortgageState = useMemo(
     () => ({
       steps: {
@@ -376,6 +416,26 @@ function App() {
           netCash
         }
       },
+      dataSnapshots: {
+        bankRateSnapshotId: marketRates.snapshotId,
+        bankRatesLastRefreshed: marketRates.lastRefreshed || marketRates.captured,
+        ocrForecastSnapshotId: DEFAULT_OCR_FORECAST_SNAPSHOT.id,
+        ocrForecastLastRefreshed: DEFAULT_OCR_FORECAST_SNAPSHOT.lastRefreshed
+      },
+      calculationRun: createCalculationRun({
+        inputs: {
+          loanAmount,
+          tranches: mathTranches,
+          primaryFrequency
+        },
+        result: {
+          repayment: summary.repayment,
+          totalInterest: summary.totalInterest,
+          selectedForecastRow
+        },
+        bankRateSnapshot: { id: marketRates.snapshotId },
+        ocrForecastSnapshot: DEFAULT_OCR_FORECAST_SNAPSHOT
+      }),
       rawFormState: formState
     }),
     [
@@ -402,9 +462,145 @@ function App() {
       outgoingAmount,
       interestOnlyYears,
       netCash,
+      marketRates.snapshotId,
+      marketRates.lastRefreshed,
+      marketRates.captured,
       formState
     ]
   );
+  const summaryPayloadBase = useMemo(
+    () =>
+      buildSummaryPayload({
+        ratesSnapshotId: marketRates.snapshotId,
+        ocrSnapshotId: DEFAULT_OCR_FORECAST_SNAPSHOT.id,
+        inputs: {
+          loanBalance: loanAmount,
+          loanStructure,
+          repaymentFrequency: primaryFrequency,
+          incomePerPeriod: salaryAmount,
+          incomeFrequency: primaryFrequency,
+          extraPaymentPerPeriod: toPositive(extraPayment),
+          livingCostsPerPeriod: outgoingAmount,
+          interestOnlyYears: toPositive(interestOnlyYears),
+          loanParts: normalizedTranches.map((tranche, index) => ({
+            id: tranche.id,
+            index: index + 1,
+            balance: tranche.amount,
+            effectiveBalance: mathTranches[index]?.amount ?? tranche.amount,
+            offsetBalance: tranche.offsetBalance,
+            rate: tranche.rate,
+            termYears: tranche.termYears,
+            type: tranche.type,
+            repaymentFrequency: tranche.frequency,
+            fixedTermMonths: tranche.fixedTermMonths,
+            fixedEndsInMonths: tranche.fixedMonths
+          }))
+        },
+        outputs: {
+          currentMonthlyRepayment: monthlyEquivalent(summary.repayment, primaryFrequency),
+          currentRepaymentPerSelectedPeriod: summary.repayment,
+          selectedCashFlowFrequency: primaryFrequency,
+          totalInterest: summary.totalInterest,
+          cashAfterRepaymentPerSelectedPeriod: netCash.remainingCash,
+          cashAfterRepaymentMonthly: monthlyEquivalent(netCash.remainingCash, primaryFrequency),
+          cashAfterTopUpAndLivingCostsPerSelectedPeriod: netCash.cashAfterOutgoings,
+          dtiEstimate: dtiRatio,
+          repaymentToIncomePercent: repaymentToIncome,
+          weightedAverageRate: modelRate
+        },
+        marketComparison: {
+          selectedBankId: selectedMarketBankId,
+          selectedBankLabel: marketBankOptions.find((bank) => bank.id === selectedMarketBankId)?.name || "Five-bank average",
+          rows: marketRateRows.map((row) => ({
+            loanPart: row.index,
+            balance: row.balance,
+            currentRate: row.currentRate,
+            marketRate: row.marketRate,
+            comparisonSource: row.comparisonSource,
+            marketTerm: row.marketTerm,
+            differenceVsYourRate: row.difference,
+            currentRepayment: row.currentRepayment,
+            marketRepayment: row.marketRepayment,
+            estimatedMonthlyImpact: monthlyEquivalent(row.repaymentDifference, row.frequency)
+          }))
+        },
+        refixScenario: {
+          selectedLoanPart: selectedForecastTranche?.index ?? 1,
+          selectedTermMonths: selectedForecastRow?.months ?? selectedForecastTermMonths,
+          selectedTermLabel: selectedForecastRow?.label ?? "",
+          refixPointLabel: selectedForecastRow?.refixPointLabel ?? "",
+          balanceAtRefix: selectedForecastRow?.remainingBalance ?? 0,
+          forecastOcr: selectedForecastRow?.forecastOcr ?? 0,
+          forecastMortgageRate: selectedForecastScenario?.forecastMortgageRate ?? 0,
+          estimatedMonthlyRepayment: monthlyEquivalent(
+            selectedForecastScenario?.repayment ?? 0,
+            selectedForecastTranche?.frequency || primaryFrequency
+          ),
+          estimatedMonthlyImpact: monthlyEquivalent(
+            selectedForecastScenario?.repaymentChange ?? 0,
+            selectedForecastTranche?.frequency || primaryFrequency
+          ),
+          scenarioKey: selectedForecastScenario?.key ?? "",
+          scenarioLabel: selectedForecastScenario?.label ?? ""
+        },
+        visuals: {
+          payoffRows,
+          chartSeries: ["standardDebt", "fasterDebt"],
+          summaryText: summaryContent.plainText
+        },
+        disclaimer: summaryContent.disclaimer
+      }),
+    [
+      marketRates.snapshotId,
+      loanAmount,
+      loanStructure,
+      primaryFrequency,
+      salaryAmount,
+      extraPayment,
+      outgoingAmount,
+      interestOnlyYears,
+      normalizedTranches,
+      mathTranches,
+      summary,
+      netCash.remainingCash,
+      netCash.cashAfterOutgoings,
+      dtiRatio,
+      repaymentToIncome,
+      modelRate,
+      selectedMarketBankId,
+      marketBankOptions,
+      marketRateRows,
+      selectedForecastTranche,
+      selectedForecastRow,
+      selectedForecastTermMonths,
+      selectedForecastScenario,
+      payoffRows,
+      summaryContent
+    ]
+  );
+
+  useEffect(() => {
+    if (loanAmount > 0) {
+      trackOnce(trackedEvents, "calculator_started", { loanAmount });
+      trackOnce(trackedEvents, "step_1_completed", { loanAmount });
+    }
+  }, [loanAmount]);
+
+  useEffect(() => {
+    if (!setupComplete) return;
+
+    trackOnce(trackedEvents, "step_2_completed", { loanStructure, loanPartCount: normalizedTranches.length });
+    trackOnce(trackedEvents, "step_3_viewed");
+    trackOnce(trackedEvents, "step_4_viewed");
+    trackOnce(trackedEvents, "step_5_viewed");
+    trackOnce(trackedEvents, "step_6_completed");
+
+    if (!trackedEvents.current.has("summary_viewed")) {
+      trackedEvents.current.add("summary_viewed");
+      trackEvent("summary_viewed");
+      trackCalculatorRun(summaryPayloadBase);
+    }
+  }, [loanStructure, normalizedTranches.length, setupComplete, summaryPayloadBase]);
 
   function updateTranche(id, patch) {
     Object.entries(patch).forEach(([field, value]) => {
@@ -436,12 +632,33 @@ function App() {
   }
 
   function resetTool() {
+    trackEvent("reset_clicked").catch(() => {});
     dispatch({ type: "RESET" });
   }
 
-  function handleLeadCapture(payload) {
-    window.dispatchEvent(new CustomEvent("trimrate:lead-capture", { detail: payload }));
-    console.info("TrimRate tailored review requested", payload);
+  async function handleLeadCapture(payload) {
+    const response = await submitLeadPayload({
+      contact: payload.contact,
+      consent: payload.consent,
+      summaryPayload: payload.summaryPayload,
+      website: payload.website
+    });
+    window.dispatchEvent(new CustomEvent("trimrate:lead-capture", { detail: { ...payload, response } }));
+    console.info("TrimRate mortgage adviser review requested", { leadId: response.leadId });
+    return response;
+  }
+
+  function handlePdfGeneration(payload) {
+    window.dispatchEvent(new CustomEvent("trimrate:pdf-generation-requested", { detail: payload }));
+    console.info("TrimRate PDF generation hook fired", payload);
+  }
+
+  function handleSummaryExported(exportType) {
+    if (exportType === "lead_form_started" || exportType === "consent_checked") {
+      trackEvent(exportType).catch(() => {});
+      return;
+    }
+    trackEvent("summary_exported", { exportType }).catch(() => {});
   }
 
   return (
@@ -455,7 +672,7 @@ function App() {
             <div>
               <h1 className="text-2xl font-black sm:text-3xl">TrimRate.co.nz</h1>
               <p className="mt-1 max-w-3xl text-sm leading-5 text-[#7B756E]">
-                Built by Kiwis for Kiwis, TrimRate helps you outsmart the OCR, see where rates are heading, and slash your interest to trim what you pay.
+                Built by Kiwis for Kiwis, TrimRate shows mortgage repayments, market-rate comparisons, and re-fix scenarios in one place.
               </p>
             </div>
           </div>
@@ -493,9 +710,9 @@ function App() {
           <section className="space-y-5">
             <div className="grid gap-3 md:grid-cols-4">
               <Stat
-                label={`${primaryFrequency} Repayment`}
+                label={`${repaymentFrequencyLabel} Repayment`}
                 value={currency(summary.repayment)}
-                sub={`At blended ${percent(modelRate)} over ${modelYears} years`}
+                sub={repaymentFrequencyNote}
                 icon={Banknote}
               />
               <Stat label="Effective balance" value={currency(effectiveLoan)} sub="After offset/redraw" icon={SlidersHorizontal} />
@@ -512,11 +729,16 @@ function App() {
 
             <RepaymentSummaryStep
               primaryFrequency={primaryFrequency}
+              repaymentFrequencyLabel={repaymentFrequencyLabel}
+              repaymentFrequencyNote={repaymentFrequencyNote}
+              hasMixedRepaymentFrequencies={hasMixedRepaymentFrequencies}
               summary={summary}
               modelRate={modelRate}
               modelYears={modelYears}
               salaryIncome={salaryIncome}
               salaryAmount={salaryAmount}
+              repaymentToIncome={repaymentToIncome}
+              cashAfterRepayment={netCash.remainingCash}
               dtiRatio={dtiRatio}
               dti={dti}
               tranchesWithPayments={tranchesWithPayments}
@@ -538,6 +760,8 @@ function App() {
               selectedForecastTrancheId={selectedForecastTrancheId}
               selectedForecastFrequency={selectedForecastFrequency}
               selectedForecastPayment={selectedForecastPayment}
+              selectedForecastRow={selectedForecastRow}
+              scenarioLabel={refixScenarioView.scenarioLabel}
               selectedForecastTermMonths={selectedForecastTermMonths}
               setSelectedForecastTermMonths={setSelectedForecastTermMonths}
               setSelectedForecastTrancheId={setSelectedForecastTrancheId}
@@ -556,9 +780,12 @@ function App() {
             />
 
             <ExecutiveSummaryLeadStep
-              advice={executiveAdvice}
+              summaryContent={summaryContent}
+              summaryPayloadBase={summaryPayloadBase}
               serializedState={serializedMortgageState}
               onSubmitLead={handleLeadCapture}
+              onPdfRequested={handlePdfGeneration}
+              onSummaryExported={handleSummaryExported}
             />
           </section>
         )}
@@ -573,3 +800,9 @@ function App() {
 }
 
 createRoot(document.getElementById("root")).render(<App />);
+
+function trackOnce(ref, eventName, payload = {}) {
+  if (ref.current.has(eventName)) return;
+  ref.current.add(eventName);
+  trackEvent(eventName, payload).catch(() => {});
+}

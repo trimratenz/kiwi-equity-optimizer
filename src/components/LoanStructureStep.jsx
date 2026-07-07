@@ -25,7 +25,7 @@ export function LoanStructureStep({
     <StepShell
       step="Step 2"
       icon={Landmark}
-      title="Tell us how the loan is structured"
+      title="Tell us how your loan is structured"
       detail="One loan part is enough for most people. Add another only if your mortgage is split across different rates or repayment settings."
     >
       <div className="grid gap-5">

@@ -17,14 +17,14 @@ export function MarketRateComparisonStep({
     fallback: "Cached rates"
   }[marketRates.status];
   const selectedBankName = bankOptions.find((bank) => bank.id === selectedBankId)?.name;
-  const matchedRateLabel = selectedBankName ? `${selectedBankName} rate` : "Matched average";
+  const matchedRateLabel = selectedBankName ? `${selectedBankName} rate` : "Five-bank average";
 
   return (
     <StepShell
       step="Step 4"
       icon={Sparkles}
-      title="How does each loan part compare?"
-      detail={`Each loan part is matched to the closest term from ${marketRates.source}, refreshed ${marketRates.captured}. Leave the bank selector blank for the average, or choose one bank for a direct comparison.`}
+      title="How does each loan part compare with the market?"
+      detail={`Each loan part is matched to the closest term from ${marketRates.source}. Last refreshed ${marketRates.lastRefreshed || marketRates.captured}. Leave the bank selector blank for the average, or choose one bank for a direct comparison.`}
     >
       <div className="mb-4 grid gap-3 lg:grid-cols-[1fr_260px] lg:items-end">
         <div className="flex flex-wrap items-center gap-2">
@@ -40,7 +40,7 @@ export function MarketRateComparisonStep({
         <label className="grid gap-2 text-sm font-semibold text-[#1B2A22]">
           <span className="text-xs font-bold uppercase tracking-wide text-[#7B756E]">Bank view</span>
           <Select value={selectedBankId} onChange={setSelectedBankId}>
-            <option value="">All banks average</option>
+            <option value="">Five-bank average</option>
             {bankOptions.map((bank) => (
               <option key={bank.id} value={bank.id}>
                 {bank.name}
@@ -67,8 +67,8 @@ export function MarketRateComparisonStep({
               <th className="p-3">{matchedRateLabel}</th>
               <th className="p-3">Lowest bank</th>
               <th className="p-3">Your rate</th>
-              <th className="p-3">Rate diff.</th>
-              <th className="p-3">Repayment impact</th>
+              <th className="p-3">Difference vs your rate</th>
+              <th className="p-3">Estimated monthly impact</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#E2DDD5] text-[#1B2A22]">

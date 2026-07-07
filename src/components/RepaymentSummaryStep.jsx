@@ -1,46 +1,51 @@
 import React from "react";
 import { Banknote, PieChart, PiggyBank } from "lucide-react";
-import { FREQUENCY_CONFIG, currency, percent } from "../financialModel";
+import { currency, percent } from "../financialModel";
 import { Field, NumberInput, Stat, StepShell } from "./ui";
 
 export function RepaymentSummaryStep({
   primaryFrequency,
+  repaymentFrequencyLabel,
+  repaymentFrequencyNote,
+  hasMixedRepaymentFrequencies,
   summary,
   modelRate,
   modelYears,
   salaryIncome,
   salaryAmount,
+  repaymentToIncome,
+  cashAfterRepayment,
   dtiRatio,
   dti,
   tranchesWithPayments,
   dispatch
 }) {
   const frequencyLabel = primaryFrequency;
-  const totalAnnualRepayment = tranchesWithPayments.reduce((sum, tranche) => sum + tranche.annualPayment, 0);
-  const repaymentPerSelectedPeriod = totalAnnualRepayment / FREQUENCY_CONFIG[primaryFrequency].periodsPerYear;
-  const repaymentToIncome = salaryAmount > 0 ? (repaymentPerSelectedPeriod / salaryAmount) * 100 : 0;
-  const cashAfterRepayment = salaryAmount - repaymentPerSelectedPeriod;
+  const totalRepaymentLabel = repaymentFrequencyLabel || frequencyLabel;
+  const totalRepaymentNote =
+    repaymentFrequencyNote || `Summed loan-part schedules; weighted ${percent(modelRate)} over ${modelYears} years`;
+  const repaymentPerSelectedPeriod = summary.repayment;
 
   return (
     <StepShell
       step="Step 3"
       icon={Banknote}
-      title="What will I pay?"
+      title="What am I paying now?"
       detail="Start here if you simply need to know the repayment, total cost, and what remains after paying the mortgage."
     >
       <div className="grid gap-5">
         <div className="grid gap-4 rounded-2xl border border-[#E2DDD5] bg-[#F7F5F0] p-4 sm:p-5 md:grid-cols-2 xl:grid-cols-6">
           <Stat
-            label={`${frequencyLabel} Repayment`}
+            label={`${totalRepaymentLabel} Repayment`}
             value={currency(repaymentPerSelectedPeriod)}
-            sub={`Weighted ${percent(modelRate)} over ${modelYears} years`}
+            sub={totalRepaymentNote}
             icon={Banknote}
             className="xl:col-span-3 xl:p-6"
           />
           <div className="rounded-xl border border-[#E2DDD5] bg-white p-4 shadow-[0_12px_34px_rgba(27,42,34,0.06)] xl:col-span-3 xl:p-6">
             <Field
               label={`${frequencyLabel} Income`}
-              hint="After tax is best"
+              hint="After-tax income"
               error={salaryAmount <= 0 ? "Optional" : undefined}
             >
               <NumberInput
@@ -54,9 +59,13 @@ export function RepaymentSummaryStep({
             </Field>
           </div>
           <Stat
-            label="Cash After Repayment"
+            label="Cash after repayment"
             value={salaryAmount > 0 ? currency(cashAfterRepayment) : "Add income"}
-            sub={salaryAmount > 0 ? `${frequencyLabel} surplus after standard mortgage payments` : `Enter ${primaryFrequency.toLowerCase()} income above`}
+            sub={
+              salaryAmount > 0
+                ? `${totalRepaymentLabel} surplus after standard mortgage payments`
+                : `Enter ${primaryFrequency.toLowerCase()} income above`
+            }
             icon={PiggyBank}
             className="xl:col-span-3 xl:p-6"
           />
@@ -129,7 +138,7 @@ export function RepaymentSummaryStep({
             <tfoot className="border-t border-[#E2DDD5] bg-[#F7F5F0] text-[#1B2A22]">
               <tr>
                   <td className="px-2 py-3 font-black sm:px-3" colSpan={5}>
-                  {frequencyLabel} Repayment
+                  {totalRepaymentLabel} Repayment
                 </td>
                 <td className="break-words px-2 py-3 font-black text-[#3A6047] sm:px-3">
                   {currency(repaymentPerSelectedPeriod)}
@@ -138,6 +147,12 @@ export function RepaymentSummaryStep({
             </tfoot>
           </table>
         </div>
+        {hasMixedRepaymentFrequencies && (
+          <p className="text-xs font-medium leading-5 text-[#7B756E]">
+            Mixed repayment frequencies are not added directly. TrimRate annualises each loan part's actual schedule, then
+            converts the total back to the selected cash-flow period for the headline figure.
+          </p>
+        )}
       </div>
     </StepShell>
   );

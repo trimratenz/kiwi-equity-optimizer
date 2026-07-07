@@ -1,26 +1,33 @@
+import {
+  DEFAULT_BANK_RATE_SNAPSHOT,
+  DEFAULT_OCR_FORECAST_SNAPSHOT,
+  USER_RATE_DATA_NOTICE,
+  addMonthsToDate,
+  buildBankRateSnapshotView,
+  lookupOcrForecastByDate
+} from "./snapshotLayer.js";
+
 export const FREQUENCY_CONFIG = {
   Weekly: { periodsPerYear: 52, label: "week", short: "wk" },
   Fortnightly: { periodsPerYear: 26, label: "fortnight", short: "fn" },
   Monthly: { periodsPerYear: 12, label: "month", short: "mo" }
 };
 
-export const CURRENT_OCR_ASSUMPTION = 2.25;
+export const CALCULATION_AS_OF_DATE = "2026-07-07";
+export const CALCULATION_ENGINE_VERSION = "trimrate-calculation-engine-2026-07-07.1";
+
+export const CURRENT_OCR_ASSUMPTION = DEFAULT_OCR_FORECAST_SNAPSHOT.currentOcr;
 
 export const RBNZ_OCR_FORECAST_SOURCE = {
-  source: "RBNZ Monetary Policy Statement OCR track",
+  id: DEFAULT_OCR_FORECAST_SNAPSHOT.id,
+  source: DEFAULT_OCR_FORECAST_SNAPSHOT.source,
   url: "https://www.rbnz.govt.nz/monetary-policy/monetary-policy-statement",
   publicationsUrl: "https://www.rbnz.govt.nz/research-and-publications/publications/publications-library",
   ocrDecisionsUrl: "https://www.rbnz.govt.nz/monetary-policy/about-monetary-policy/official-cash-rate",
-  note:
-    "Update these values from the latest RBNZ Monetary Policy Statement projection tables. Direct RBNZ pages may require browser access because automated fetches can be blocked.",
-  forecast: [
-    { months: 6, ocr: 2.6 },
-    { months: 12, ocr: 2.55 },
-    { months: 24, ocr: 2.45 },
-    { months: 36, ocr: 2.45 },
-    { months: 48, ocr: 2.45 },
-    { months: 60, ocr: 2.45 }
-  ]
+  note: USER_RATE_DATA_NOTICE,
+  capturedAt: DEFAULT_OCR_FORECAST_SNAPSHOT.capturedAt,
+  reviewedAt: DEFAULT_OCR_FORECAST_SNAPSHOT.reviewedAt,
+  forecast: DEFAULT_OCR_FORECAST_SNAPSHOT.forecast
 };
 
 export const OCR_FORECAST_SOURCES = [RBNZ_OCR_FORECAST_SOURCE];
@@ -72,22 +79,7 @@ export const FIXED_TERM_OPTIONS = [
   { months: 60, label: "5 years", rateType: "fixed5y" }
 ];
 
-export const MARKET_RATE_SNAPSHOT = {
-  source: "Cached 5-bank fallback",
-  url: "",
-  captured: "2026-07-05",
-  note: "Cached major-bank comparison rates used only when the live Rates API request is unavailable. Confirm directly with lenders before re-fixing.",
-  rates: [
-    { term: "6 months", rate: 4.68 },
-    { term: "1 year", rate: 4.73 },
-    { term: "18 months", rate: 5.12 },
-    { term: "2 years", rate: 5.24 },
-    { term: "3 years", rate: 5.35 },
-    { term: "4 years", rate: 5.47 },
-    { term: "5 years", rate: 5.57 },
-    { term: "Floating", rate: 5.81 }
-  ]
-};
+export const MARKET_RATE_SNAPSHOT = buildBankRateSnapshotView(DEFAULT_BANK_RATE_SNAPSHOT);
 
 const MARKET_TERM_MONTHS = {
   "6 months": 6,
@@ -153,7 +145,7 @@ export function affordabilitySnapshot({ repayment, income }) {
     tone,
     incomeNeededForTarget: targetRatio > 0 ? safeRepayment / (targetRatio / 100) : 0,
     incomeNeededForWatch: watchRatio > 0 ? safeRepayment / (watchRatio / 100) : 0,
-    cashAfterRepayment: Math.max(safeIncome - safeRepayment, 0),
+    cashAfterRepayment: safeIncome - safeRepayment,
     targetRepaymentAtIncome: safeIncome * (targetRatio / 100),
     watchRepaymentAtIncome: safeIncome * (watchRatio / 100),
     headroomToTarget: safeIncome > 0 ? safeIncome * (targetRatio / 100) - safeRepayment : 0,
@@ -174,12 +166,39 @@ export function yearsAndMonths(periods, frequency = "Monthly") {
   return `${years} yr ${remainingMonths} mo`;
 }
 
+function safeMoney(value) {
+  return Math.max(Number(value) || 0, 0);
+}
+
+function safeFrequency(frequency = "Monthly") {
+  return FREQUENCY_CONFIG[frequency] ? frequency : "Monthly";
+}
+
+function periodsPerYear(frequency = "Monthly") {
+  return FREQUENCY_CONFIG[safeFrequency(frequency)].periodsPerYear;
+}
+
+function normaliseLoanPart(part, fallbackFrequency = "Monthly") {
+  const frequency = safeFrequency(part?.frequency || fallbackFrequency);
+  const principal = safeMoney(part?.amount ?? part?.principal ?? part?.balance);
+
+  return {
+    ...part,
+    amount: principal,
+    principal,
+    rate: Number(part?.rate ?? part?.annualRate) || 0,
+    termYears: Math.max(Number(part?.termYears ?? part?.years) || 1, 1),
+    frequency,
+    fixedMonths: Math.max(Number(part?.fixedMonths) || 0, 0)
+  };
+}
+
 export function calculatePayment(principal, annualRate, years, frequency = "Monthly") {
-  const safePrincipal = Math.max(Number(principal) || 0, 0);
+  const safePrincipal = safeMoney(principal);
   const safeYears = Math.max(Number(years) || 1, 1);
-  const periodsPerYear = FREQUENCY_CONFIG[frequency].periodsPerYear;
-  const totalPeriods = safeYears * periodsPerYear;
-  const periodicRate = (Number(annualRate) || 0) / 100 / periodsPerYear;
+  const periodCount = periodsPerYear(frequency);
+  const totalPeriods = safeYears * periodCount;
+  const periodicRate = (Number(annualRate) || 0) / 100 / periodCount;
 
   if (periodicRate === 0) return safePrincipal / totalPeriods;
 
@@ -189,37 +208,147 @@ export function calculatePayment(principal, annualRate, years, frequency = "Mont
   );
 }
 
+export function calculateLoanPartRepayment(part, fallbackFrequency = "Monthly") {
+  const normalised = normaliseLoanPart(part, fallbackFrequency);
+  return calculatePayment(normalised.principal, normalised.rate, normalised.termYears, normalised.frequency);
+}
+
+export function weightedAverageRate(tranches) {
+  const active = tranches.map((tranche) => normaliseLoanPart(tranche)).filter((tranche) => tranche.principal > 0);
+  const totalPrincipal = active.reduce((sum, tranche) => sum + tranche.principal, 0);
+  if (totalPrincipal <= 0) return 0;
+
+  return active.reduce((sum, tranche) => sum + tranche.principal * tranche.rate, 0) / totalPrincipal;
+}
+
+export function totalRepaymentAcrossLoanParts(tranches, displayFrequency = "Monthly") {
+  const targetFrequency = safeFrequency(displayFrequency);
+  const annualPayment = tranches.reduce((sum, tranche) => {
+    const normalised = normaliseLoanPart(tranche, targetFrequency);
+    const repayment = calculateLoanPartRepayment(normalised);
+    return sum + paymentToAnnual(repayment, normalised.frequency);
+  }, 0);
+
+  return paymentFromAnnual(annualPayment, targetFrequency);
+}
+
+function periodsForMonths(months, frequency = "Monthly") {
+  return Math.ceil((Math.max(Number(months) || 0, 0) / 12) * periodsPerYear(frequency));
+}
+
+export function amortizeLoanPart({
+  principal,
+  annualRate,
+  years,
+  frequency = "Monthly",
+  extraPayment = 0,
+  interestOnlyYears = 0,
+  maxPeriods
+}) {
+  const safePrincipal = safeMoney(principal);
+  const safeYears = Math.max(Number(years) || 1, 1);
+  const safeFrequencyName = safeFrequency(frequency);
+  const periodCount = periodsPerYear(safeFrequencyName);
+  const periodicRate = (Number(annualRate) || 0) / 100 / periodCount;
+  const basePayment = calculatePayment(safePrincipal, annualRate, safeYears, safeFrequencyName);
+  const extraPerPeriod = safeMoney(extraPayment);
+  const interestOnlyPeriods = Math.round(Math.max(Number(interestOnlyYears) || 0, 0) * periodCount);
+  const scheduledPeriods = Math.ceil(safeYears * periodCount);
+  const periodLimit = Number.isFinite(maxPeriods) ? Math.max(Math.round(maxPeriods), 0) : scheduledPeriods;
+  const rows = [];
+  let balance = safePrincipal;
+  let totalInterest = 0;
+  let totalPrincipal = 0;
+  let yearInterest = 0;
+  let period = 0;
+
+  for (; period < periodLimit && balance > 1e-8; period += 1) {
+    const interest = balance * periodicRate;
+    const isInterestOnly = period < interestOnlyPeriods;
+    const scheduledPayment = isInterestOnly ? interest : basePayment;
+    const principalPaid = isInterestOnly
+      ? 0
+      : Math.max(0, Math.min(balance, scheduledPayment + extraPerPeriod - interest));
+
+    balance = Math.max(0, balance - principalPaid);
+    totalPrincipal += principalPaid;
+    totalInterest += interest;
+    yearInterest += interest;
+
+    if ((period + 1) % periodCount === 0 || balance <= 1e-8 || period + 1 === periodLimit) {
+      rows.push({
+        year: Math.ceil((period + 1) / periodCount),
+        debt: balance,
+        annualInterest: yearInterest,
+        totalInterest
+      });
+      yearInterest = 0;
+    }
+  }
+
+  return {
+    rows,
+    repayment: basePayment,
+    totalInterest,
+    totalPrincipal,
+    totalPaid: totalPrincipal + totalInterest,
+    periodsToRepay: period,
+    finalDebt: balance
+  };
+}
+
+export function balanceAfterMonths({ principal, annualRate, years, frequency = "Monthly", months = 0 }) {
+  return amortizeLoanPart({
+    principal,
+    annualRate,
+    years,
+    frequency,
+    maxPeriods: periodsForMonths(months, frequency)
+  }).finalDebt;
+}
+
+export function principalAndInterestPaidAfterMonths({ principal, annualRate, years, frequency = "Monthly", months = 0 }) {
+  const schedule = amortizeLoanPart({
+    principal,
+    annualRate,
+    years,
+    frequency,
+    maxPeriods: periodsForMonths(months, frequency)
+  });
+
+  return {
+    principal: schedule.totalPrincipal,
+    interest: schedule.totalInterest,
+    total: schedule.totalPrincipal + schedule.totalInterest,
+    balance: schedule.finalDebt,
+    periods: schedule.periodsToRepay
+  };
+}
+
 export function remainingPrincipalAndInterestToFixedEnd(tranches, fallbackFrequency = "Monthly") {
   const rows = tranches.map((tranche) => {
-    const frequency = tranche.frequency || fallbackFrequency;
-    const periodsPerYear = FREQUENCY_CONFIG[frequency].periodsPerYear;
-    const remainingMonths = tranche.type === "Fixed" ? Math.max(Number(tranche.fixedMonths) || 0, 0) : 0;
-    const periodsRemaining = Math.ceil((remainingMonths / 12) * periodsPerYear);
-    const periodicRate = (Number(tranche.rate) || 0) / 100 / periodsPerYear;
-    const repayment = calculatePayment(tranche.amount, tranche.rate, tranche.termYears, frequency);
-    let balance = Math.max(Number(tranche.amount) || 0, 0);
-    let principal = 0;
-    let interest = 0;
-
-    for (let period = 0; period < periodsRemaining && balance > 0.5; period += 1) {
-      const periodInterest = balance * periodicRate;
-      const principalPaid = Math.max(0, Math.min(balance, repayment - periodInterest));
-      principal += principalPaid;
-      interest += periodInterest;
-      balance = Math.max(0, balance - principalPaid);
-    }
+    const normalised = normaliseLoanPart(tranche, fallbackFrequency);
+    const remainingMonths = tranche.type === "Fixed" ? normalised.fixedMonths : 0;
+    const periodsRemaining = periodsForMonths(remainingMonths, normalised.frequency);
+    const schedule = amortizeLoanPart({
+      principal: normalised.principal,
+      annualRate: normalised.rate,
+      years: normalised.termYears,
+      frequency: normalised.frequency,
+      maxPeriods: periodsRemaining
+    });
 
     return {
       id: tranche.id,
       index: tranche.index,
-      frequency,
+      frequency: normalised.frequency,
       remainingMonths,
       periodsRemaining,
-      repayment,
-      principal: Math.round(principal),
-      interest: Math.round(interest),
-      total: Math.round(principal + interest),
-      balanceAtFixedEnd: Math.round(balance)
+      repayment: schedule.repayment,
+      principal: schedule.totalPrincipal,
+      interest: schedule.totalInterest,
+      total: schedule.totalPrincipal + schedule.totalInterest,
+      balanceAtFixedEnd: schedule.finalDebt
     };
   });
 
@@ -261,21 +390,39 @@ export function lookupMatrixPayment(matrix, rate) {
 }
 
 export function paymentToAnnual(payment, frequency = "Monthly") {
-  return payment * FREQUENCY_CONFIG[frequency].periodsPerYear;
+  return payment * periodsPerYear(frequency);
 }
 
 export function paymentFromAnnual(annualPayment, frequency = "Monthly") {
-  return annualPayment / FREQUENCY_CONFIG[frequency].periodsPerYear;
+  return annualPayment / periodsPerYear(frequency);
 }
 
 export function annualIncomeFromPeriod(periodIncome, frequency = "Monthly") {
-  return Math.max(Number(periodIncome) || 0, 0) * FREQUENCY_CONFIG[frequency].periodsPerYear;
+  return safeMoney(periodIncome) * periodsPerYear(frequency);
 }
 
 export function debtToIncomeRatio(totalDebt, periodIncome, frequency = "Monthly") {
   const annualIncome = annualIncomeFromPeriod(periodIncome, frequency);
-  const safeDebt = Math.max(Number(totalDebt) || 0, 0);
+  const safeDebt = safeMoney(totalDebt);
   return annualIncome > 0 ? safeDebt / annualIncome : 0;
+}
+
+export function repaymentToIncomeRatio(repayment, income) {
+  const safeIncome = safeMoney(income);
+  return safeIncome > 0 ? (safeMoney(repayment) / safeIncome) * 100 : 0;
+}
+
+export function cashAfterRepayment(income, repayment) {
+  return safeMoney(income) - safeMoney(repayment);
+}
+
+export function cashAfterMortgageTopUpAndLivingCosts({
+  periodIncome,
+  standardRepayment,
+  extraPayment = 0,
+  livingCosts = 0
+}) {
+  return cashAfterRepayment(periodIncome, standardRepayment) - safeMoney(extraPayment) - safeMoney(livingCosts);
 }
 
 export function dtiAssessment(ratio) {
@@ -324,22 +471,26 @@ export function dtiAssessment(ratio) {
 }
 
 export function netCashPosition({ periodIncome, standardRepayment, extraPayment = 0, outgoingCosts = 0, frequency = "Monthly" }) {
-  const incomePerPeriod = Math.max(Number(periodIncome) || 0, 0);
-  const safeStandardRepayment = Math.max(Number(standardRepayment) || 0, 0);
-  const extraPerPeriod = Math.max(Number(extraPayment) || 0, 0);
-  const safeOutgoingCosts = Math.max(Number(outgoingCosts) || 0, 0);
+  const incomePerPeriod = safeMoney(periodIncome);
+  const safeStandardRepayment = safeMoney(standardRepayment);
+  const extraPerPeriod = safeMoney(extraPayment);
+  const safeOutgoingCosts = safeMoney(outgoingCosts);
   const repaymentWithExtra = safeStandardRepayment + extraPerPeriod;
-  const cashAfterRepayment = incomePerPeriod - repaymentWithExtra;
 
   return {
-    frequency,
+    frequency: safeFrequency(frequency),
     incomePerPeriod,
     standardRepayment: safeStandardRepayment,
     extraPerPeriod,
     outgoingCosts: safeOutgoingCosts,
     repaymentWithExtra,
-    remainingCash: cashAfterRepayment,
-    cashAfterOutgoings: cashAfterRepayment - safeOutgoingCosts
+    remainingCash: cashAfterRepayment(incomePerPeriod, safeStandardRepayment),
+    cashAfterOutgoings: cashAfterMortgageTopUpAndLivingCosts({
+      periodIncome: incomePerPeriod,
+      standardRepayment: safeStandardRepayment,
+      extraPayment: extraPerPeriod,
+      livingCosts: safeOutgoingCosts
+    })
   };
 }
 
@@ -352,52 +503,20 @@ export function amortizationSeries({
   interestOnlyYears = 0,
   horizonYears = years
 }) {
-  const periodsPerYear = FREQUENCY_CONFIG[frequency].periodsPerYear;
-  const periodicRate = (Number(annualRate) || 0) / 100 / periodsPerYear;
-  const interestOnlyPeriods = Math.round(Math.max(interestOnlyYears, 0) * periodsPerYear);
-  const basePayment = calculatePayment(principal, annualRate, years, frequency);
-  const extraPerPeriod = Math.max(Number(extraPayment) || 0, 0);
-  const rows = [];
-  let balance = Math.max(Number(principal) || 0, 0);
-  let totalInterest = 0;
-  let yearInterest = 0;
-  let period = 0;
-
-  for (; period < horizonYears * periodsPerYear && balance > 0.5; period += 1) {
-    const interest = balance * periodicRate;
-    const isInterestOnly = period < interestOnlyPeriods;
-    const scheduledPayment = isInterestOnly ? interest : basePayment;
-    const principalPaid = isInterestOnly
-      ? 0
-      : Math.max(0, Math.min(balance, scheduledPayment + extraPerPeriod - interest));
-
-    balance = Math.max(0, balance - principalPaid);
-    totalInterest += interest;
-    yearInterest += interest;
-
-    if ((period + 1) % periodsPerYear === 0 || balance <= 0.5) {
-      rows.push({
-        year: Math.ceil((period + 1) / periodsPerYear),
-        debt: Math.round(balance),
-        annualInterest: Math.round(yearInterest),
-        totalInterest: Math.round(totalInterest)
-      });
-      yearInterest = 0;
-    }
-  }
-
-  return {
-    rows,
-    totalInterest: Math.round(totalInterest),
-    totalPaid: Math.round(totalInterest + Number(principal || 0)),
-    periodsToRepay: period,
-    finalDebt: Math.round(balance)
-  };
+  return amortizeLoanPart({
+    principal,
+    annualRate,
+    years,
+    frequency,
+    extraPayment,
+    interestOnlyYears,
+    maxPeriods: Math.ceil(Math.max(Number(horizonYears) || Number(years) || 1, 1) * periodsPerYear(frequency))
+  });
 }
 
 export function summarizeLoan({ principal, annualRate, years, frequency, extraPayment = 0, interestOnlyYears = 0 }) {
   const repayment = calculatePayment(principal, annualRate, years, frequency);
-  const extra = Math.max(Number(extraPayment) || 0, 0);
+  const extra = safeMoney(extraPayment);
   const standard = amortizationSeries({ principal, annualRate, years, frequency, interestOnlyYears });
   const accelerated = amortizationSeries({
     principal,
@@ -420,19 +539,124 @@ export function summarizeLoan({ principal, annualRate, years, frequency, extraPa
   };
 }
 
+function aggregateAnnualRows(schedules) {
+  const maxYear = schedules.reduce((max, schedule) => Math.max(max, schedule.rows.at(-1)?.year ?? 0), 0);
+
+  return Array.from({ length: maxYear }, (_, index) => {
+    const year = index + 1;
+    return schedules.reduce(
+      (row, schedule) => {
+        const exact = schedule.rows.find((item) => item.year === year);
+        const previous = schedule.rows.filter((item) => item.year < year).at(-1);
+        const snapshot = exact ?? previous;
+
+        return {
+          year,
+          debt: row.debt + (snapshot?.debt ?? 0),
+          annualInterest: row.annualInterest + (exact?.annualInterest ?? 0),
+          totalInterest: row.totalInterest + (snapshot?.totalInterest ?? 0)
+        };
+      },
+      { year, debt: 0, annualInterest: 0, totalInterest: 0 }
+    );
+  });
+}
+
+function allocateExtraByBalance(tranches, extraPayment, displayFrequency) {
+  const totalPrincipal = tranches.reduce((sum, tranche) => sum + tranche.principal, 0);
+  const annualExtra = safeMoney(extraPayment) * periodsPerYear(displayFrequency);
+
+  return tranches.map((tranche) => {
+    const share = totalPrincipal > 0 ? tranche.principal / totalPrincipal : 0;
+    return (annualExtra * share) / periodsPerYear(tranche.frequency);
+  });
+}
+
+export function summarizeMortgage({
+  tranches,
+  displayFrequency = "Monthly",
+  extraPayment = 0,
+  interestOnlyYears = 0
+}) {
+  const frequency = safeFrequency(displayFrequency);
+  const active = tranches.map((tranche) => normaliseLoanPart(tranche, frequency)).filter((tranche) => tranche.principal > 0);
+  const extrasByPart = allocateExtraByBalance(active, extraPayment, frequency);
+  const partSummaries = active.map((tranche, index) => {
+    const standard = amortizeLoanPart({
+      principal: tranche.principal,
+      annualRate: tranche.rate,
+      years: tranche.termYears,
+      frequency: tranche.frequency,
+      interestOnlyYears
+    });
+    const accelerated = amortizeLoanPart({
+      principal: tranche.principal,
+      annualRate: tranche.rate,
+      years: tranche.termYears,
+      frequency: tranche.frequency,
+      extraPayment: extrasByPart[index],
+      interestOnlyYears
+    });
+
+    return {
+      ...tranche,
+      repayment: standard.repayment,
+      annualPayment: paymentToAnnual(standard.repayment, tranche.frequency),
+      totalInterest: standard.totalInterest,
+      totalPaid: standard.totalPaid,
+      standard,
+      accelerated
+    };
+  });
+  const annualPayment = partSummaries.reduce((sum, tranche) => sum + tranche.annualPayment, 0);
+  const standardSchedules = partSummaries.map((part) => part.standard);
+  const acceleratedSchedules = partSummaries.map((part) => part.accelerated);
+  const periodsToDisplayPeriods = (schedule, index) => {
+    const partFrequency = partSummaries[index]?.frequency ?? frequency;
+    return (schedule.periodsToRepay / periodsPerYear(partFrequency)) * periodsPerYear(frequency);
+  };
+  const standard = {
+    rows: aggregateAnnualRows(standardSchedules),
+    totalInterest: standardSchedules.reduce((sum, schedule) => sum + schedule.totalInterest, 0),
+    totalPaid: standardSchedules.reduce((sum, schedule) => sum + schedule.totalPaid, 0),
+    periodsToRepay: Math.max(0, ...standardSchedules.map(periodsToDisplayPeriods)),
+    finalDebt: standardSchedules.reduce((sum, schedule) => sum + schedule.finalDebt, 0)
+  };
+  const accelerated = {
+    rows: aggregateAnnualRows(acceleratedSchedules),
+    totalInterest: acceleratedSchedules.reduce((sum, schedule) => sum + schedule.totalInterest, 0),
+    totalPaid: acceleratedSchedules.reduce((sum, schedule) => sum + schedule.totalPaid, 0),
+    periodsToRepay: Math.max(0, ...acceleratedSchedules.map(periodsToDisplayPeriods)),
+    finalDebt: acceleratedSchedules.reduce((sum, schedule) => sum + schedule.finalDebt, 0)
+  };
+  const repayment = paymentFromAnnual(annualPayment, frequency);
+
+  return {
+    frequency,
+    repayment,
+    repaymentWithExtra: repayment + safeMoney(extraPayment),
+    annualPayment,
+    totalInterest: standard.totalInterest,
+    totalPaid: standard.totalPaid,
+    interestSaved: Math.max(0, standard.totalInterest - accelerated.totalInterest),
+    timeSavedPeriods: Math.max(0, standard.periodsToRepay - accelerated.periodsToRepay),
+    weightedRate: weightedAverageRate(active),
+    partSummaries,
+    standard,
+    accelerated
+  };
+}
+
 export function weightedLoanSnapshot(tranches, fallbackFrequency) {
-  const active = tranches.filter((tranche) => Number(tranche.amount) > 0);
-  const totalPrincipal = active.reduce((sum, tranche) => sum + Number(tranche.amount || 0), 0);
-  const weightedRate =
-    active.reduce((sum, tranche) => sum + Number(tranche.amount || 0) * Number(tranche.rate || 0), 0) /
-    Math.max(totalPrincipal, 1);
+  const active = tranches.map((tranche) => normaliseLoanPart(tranche, fallbackFrequency)).filter((tranche) => tranche.principal > 0);
+  const totalPrincipal = active.reduce((sum, tranche) => sum + tranche.principal, 0);
+  const weightedRate = weightedAverageRate(active);
   const weightedTerm =
-    active.reduce((sum, tranche) => sum + Number(tranche.amount || 0) * Number(tranche.termYears || 0), 0) /
+    active.reduce((sum, tranche) => sum + tranche.principal * tranche.termYears, 0) /
     Math.max(totalPrincipal, 1);
   const annualPayment = active.reduce((sum, tranche) => {
-    const trancheFrequency = tranche.frequency || fallbackFrequency;
-    const payment = calculatePayment(tranche.amount, tranche.rate, tranche.termYears, trancheFrequency);
-    return sum + paymentToAnnual(payment, trancheFrequency);
+    const payment = calculateLoanPartRepayment(tranche, fallbackFrequency);
+    return sum + paymentToAnnual(payment, tranche.frequency);
   }, 0);
 
   return {
@@ -446,28 +670,30 @@ export function weightedLoanSnapshot(tranches, fallbackFrequency) {
 
 export function trancheRows(tranches, fallbackFrequency) {
   return tranches.map((tranche, index) => {
-    const frequency = tranche.frequency || fallbackFrequency;
-    const repayment = calculatePayment(tranche.amount, tranche.rate, tranche.termYears, frequency);
-    const summary = summarizeLoan({
-      principal: tranche.amount,
-      annualRate: tranche.rate,
-      years: tranche.termYears,
-      frequency
+    const normalised = normaliseLoanPart(tranche, fallbackFrequency);
+    const repayment = calculateLoanPartRepayment(normalised);
+    const summary = amortizeLoanPart({
+      principal: normalised.principal,
+      annualRate: normalised.rate,
+      years: normalised.termYears,
+      frequency: normalised.frequency
     });
 
     return {
       ...tranche,
       index: index + 1,
+      frequency: normalised.frequency,
       repayment,
-      annualPayment: paymentToAnnual(repayment, frequency),
+      annualPayment: paymentToAnnual(repayment, normalised.frequency),
       totalInterest: summary.totalInterest
     };
   });
 }
 
 export function calculateAverageForecastOcr(monthWindow = 24) {
+  const cutoffDate = addMonthsToDate(CALCULATION_AS_OF_DATE, monthWindow);
   const allForecasts = OCR_FORECAST_SOURCES.flatMap((source) =>
-    source.forecast.filter((item) => item.months <= monthWindow).map((item) => item.ocr)
+    source.forecast.filter((item) => item.date <= cutoffDate).map((item) => item.ocr)
   );
   const truncated = allForecasts.slice(0, monthWindow);
   return truncated.reduce((sum, item) => sum + item, 0) / truncated.length;
@@ -506,63 +732,21 @@ export function rateScenarioRows({ principal, years, frequency, averageOcr }) {
   });
 }
 
-export function balanceAfterMonths({ principal, annualRate, years, frequency = "Monthly", months = 0 }) {
-  const safePrincipal = Math.max(Number(principal) || 0, 0);
-  const periodsPerYear = FREQUENCY_CONFIG[frequency].periodsPerYear;
-  const periodsToRun = Math.round((Math.max(Number(months) || 0, 0) / 12) * periodsPerYear);
-  const periodicRate = (Number(annualRate) || 0) / 100 / periodsPerYear;
-  const scheduledPayment = calculatePayment(safePrincipal, annualRate, years, frequency);
-  let balance = safePrincipal;
-
-  for (let period = 0; period < periodsToRun && balance > 0.5; period += 1) {
-    const interest = balance * periodicRate;
-    const principalPaid = Math.max(0, Math.min(balance, scheduledPayment - interest));
-    balance = Math.max(0, balance - principalPaid);
-  }
-
-  return Math.round(balance);
-}
-
 export function consensusOcrForMonths(months) {
-  const targetMonths = Math.max(Number(months) || 0, 0);
-  const forecasts = OCR_FORECAST_SOURCES.map((source) => {
-    const sorted = [...source.forecast].sort((a, b) => a.months - b.months);
-    const exact = sorted.find((item) => item.months === targetMonths);
-    if (exact) return exact.ocr;
-
-    const previous = sorted.filter((item) => item.months < targetMonths).at(-1);
-    const next = sorted.find((item) => item.months > targetMonths);
-    if (!previous && !next) return undefined;
-    if (!previous) return next.ocr;
-    if (!next) return previous.ocr;
-
-    const progress = (targetMonths - previous.months) / (next.months - previous.months);
-    return previous.ocr + (next.ocr - previous.ocr) * progress;
-  }).filter(Number.isFinite);
+  const refixDate = addMonthsToDate(CALCULATION_AS_OF_DATE, Math.max(Number(months) || 0, 0));
+  const forecasts = [lookupOcrForecastByDate(DEFAULT_OCR_FORECAST_SNAPSHOT, refixDate).ocr].filter(Number.isFinite);
 
   return forecasts.reduce((sum, item) => sum + item, 0) / Math.max(forecasts.length, 1);
 }
 
-function interpolateForecast(source, months) {
-  const targetMonths = Math.max(Number(months) || 0, 0);
-  const sorted = [...source.forecast].sort((a, b) => a.months - b.months);
-  const exact = sorted.find((item) => item.months === targetMonths);
-  if (exact) return exact.ocr;
+export function rbnzOcrForMonths(months, ocrSnapshot = DEFAULT_OCR_FORECAST_SNAPSHOT, calculationDate = CALCULATION_AS_OF_DATE) {
+  const refixDate = addMonthsToDate(calculationDate, Math.max(Number(months) || 0, 0));
+  const forecast = lookupOcrForecastByDate(ocrSnapshot, refixDate);
 
-  const previous = sorted.filter((item) => item.months < targetMonths).at(-1);
-  const next = sorted.find((item) => item.months > targetMonths);
-  if (!previous && !next) return undefined;
-  if (!previous) return next.ocr;
-  if (!next) return previous.ocr;
-
-  const progress = (targetMonths - previous.months) / (next.months - previous.months);
-  return previous.ocr + (next.ocr - previous.ocr) * progress;
-}
-
-export function rbnzOcrForMonths(months) {
   return {
-    ocr: interpolateForecast(RBNZ_OCR_FORECAST_SOURCE, months),
-    source: RBNZ_OCR_FORECAST_SOURCE.source
+    ...forecast,
+    refixDate,
+    source: forecast.source
   };
 }
 
@@ -596,10 +780,13 @@ export function forecastRefixRows({
   frequency,
   currentPayment,
   fixedEndsInMonths = 0,
-  marketRates = MARKET_RATE_SNAPSHOT.rates
+  marketRates = MARKET_RATE_SNAPSHOT.rates,
+  bankRateSnapshotId = MARKET_RATE_SNAPSHOT.snapshotId,
+  ocrSnapshot = DEFAULT_OCR_FORECAST_SNAPSHOT,
+  calculationDate = CALCULATION_AS_OF_DATE
 }) {
   const expiryMonths = Math.max(Number(fixedEndsInMonths) || 0, 0);
-  const rbnzOcr = rbnzOcrForMonths(expiryMonths);
+  const rbnzOcr = rbnzOcrForMonths(expiryMonths, ocrSnapshot, calculationDate);
   const forecastOcr = rbnzOcr.ocr;
   const ocrMove = forecastOcr - CURRENT_OCR_ASSUMPTION;
   const remainingBalance = balanceAfterMonths({
@@ -635,6 +822,11 @@ export function forecastRefixRows({
       refixPointLabel: monthsLabel(expiryMonths),
       forecastOcr,
       forecastSource: rbnzOcr.source,
+      forecastDate: rbnzOcr.refixDate,
+      ocrSnapshotId: rbnzOcr.snapshotId,
+      bankRateSnapshotId,
+      dataNotice: USER_RATE_DATA_NOTICE,
+      ocrLastRefreshed: ocrSnapshot.lastRefreshed,
       currentOcr: CURRENT_OCR_ASSUMPTION,
       marketRateToday,
       forecastMortgageRate: baseScenario.forecastMortgageRate,
@@ -647,7 +839,57 @@ export function forecastRefixRows({
   });
 }
 
-export function buildExecutiveAdvice({
+export function buildRefixScenarioView({
+  tranches,
+  selectedTrancheId = "",
+  selectedTermMonths = 12,
+  fallbackFrequency = "Monthly",
+  fallbackPrincipal = 0,
+  fallbackRate = 0,
+  fallbackYears = 30,
+  marketRates = MARKET_RATE_SNAPSHOT.rates,
+  bankRateSnapshotId = MARKET_RATE_SNAPSHOT.snapshotId,
+  ocrSnapshot = DEFAULT_OCR_FORECAST_SNAPSHOT,
+  calculationDate = CALCULATION_AS_OF_DATE
+}) {
+  const selectedTranche = tranches.find((tranche) => tranche.id === selectedTrancheId) ?? tranches[0];
+  const selectedFrequency = selectedTranche?.frequency || fallbackFrequency;
+  const selectedPayment = selectedTranche
+    ? calculateLoanPartRepayment(selectedTranche, selectedFrequency)
+    : calculatePayment(fallbackPrincipal, fallbackRate, fallbackYears, selectedFrequency);
+  const forecastRows = forecastRefixRows({
+    principal: selectedTranche?.amount ?? fallbackPrincipal,
+    currentRate: selectedTranche?.rate ?? fallbackRate,
+    years: selectedTranche?.termYears ?? fallbackYears,
+    frequency: selectedFrequency,
+    currentPayment: selectedPayment,
+    fixedEndsInMonths: selectedTranche?.fixedMonths ?? 0,
+    marketRates,
+    bankRateSnapshotId,
+    ocrSnapshot,
+    calculationDate
+  });
+  const selectedForecastRow =
+    forecastRows.find((row) => row.months === selectedTermMonths) ??
+    forecastRows.find((row) => row.months === 12) ??
+    forecastRows[0];
+  const selectedForecastScenario =
+    selectedForecastRow?.scenarios.find((scenario) => scenario.key === "base") ?? selectedForecastRow?.scenarios[0];
+
+  return {
+    forecastRows,
+    selectedForecastTranche: selectedTranche,
+    selectedForecastTrancheId: selectedTranche?.id ?? "",
+    selectedForecastFrequency: selectedFrequency,
+    selectedForecastPayment: selectedPayment,
+    selectedForecastRow,
+    selectedForecastScenario,
+    selectedForecastTermMonths: selectedForecastRow?.months ?? selectedTermMonths,
+    scenarioLabel: selectedTranche?.index ? `Loan part ${selectedTranche.index}` : "Loan details"
+  };
+}
+
+export function buildPlainEnglishSummary({
   tranches,
   totalDebt,
   weightedRate,
@@ -661,66 +903,87 @@ export function buildExecutiveAdvice({
   repaymentToIncome,
   cashAfterRepayment,
   cashAfterOutgoings,
-  marketRates = MARKET_RATE_SNAPSHOT.rates
+  marketRateRows = []
 }) {
-  const sortedFixedTranches = [...tranches]
-    .filter((tranche) => tranche.type === "Fixed")
-    .sort((a, b) => Number(a.fixedMonths || 0) - Number(b.fixedMonths || 0));
-  const upcomingTranche = sortedFixedTranches[0] ?? selectedForecastTranche ?? tranches[0];
-  const fallbackOneYearRate = MARKET_RATE_SNAPSHOT.rates.find((rate) => rate.term === "1 year")?.rate ?? 0;
-  const oneYearRate = marketRates.find((rate) => rate.term === "1 year")?.rate ?? fallbackOneYearRate;
   const currentOcr = selectedForecastRow?.currentOcr ?? CURRENT_OCR_ASSUMPTION;
   const forecastOcr = selectedForecastRow?.forecastOcr ?? currentOcr;
-  const baseRepaymentChange = selectedForecastScenario?.repaymentChange ?? 0;
+  const baseRepaymentChange = paymentToAnnual(selectedForecastScenario?.repaymentChange ?? 0, selectedForecastTranche?.frequency || primaryFrequency) / 12;
   const extra = Math.max(Number(extraPayment) || 0, 0);
   const dtiRatio = debtToIncomeRatio(totalDebt, periodIncome, primaryFrequency);
   const dti = dtiAssessment(dtiRatio);
+  const frequencyLabel = FREQUENCY_CONFIG[primaryFrequency].label;
   const frequencyShort = FREQUENCY_CONFIG[primaryFrequency].short;
-  const upcomingBalance = upcomingTranche?.originalBalance ?? upcomingTranche?.amount ?? 0;
-  const upcomingMonths = upcomingTranche?.fixedMonths ?? 0;
-  const blendedPremium = weightedRate - oneYearRate;
+  const monthlyRepayment = paymentToAnnual(summary.repayment, primaryFrequency) / 12;
+  const monthlyCashAfterRepayment = paymentToAnnual(cashAfterRepayment, primaryFrequency) / 12;
   const surplus = Number.isFinite(cashAfterOutgoings) ? cashAfterOutgoings : 0;
+  const selectedBalance = selectedForecastRow?.remainingBalance ?? selectedForecastTranche?.amount ?? 0;
+  const selectedFrequency = selectedForecastTranche?.frequency || primaryFrequency;
+  const selectedRepayment = paymentToAnnual(selectedForecastScenario?.repayment ?? 0, selectedFrequency) / 12;
+  const topUpMonthly = paymentToAnnual(extra, primaryFrequency) / 12;
+  const livingCostsMonthly = paymentToAnnual(Number(cashAfterRepayment || 0) - Number(cashAfterOutgoings || 0) - extra, primaryFrequency) / 12;
+  const cashAfterOutgoingsMonthly = paymentToAnnual(surplus, primaryFrequency) / 12;
+  const marketComparisonCopy =
+    marketRateRows.length > 0
+      ? marketRateRows
+          .map((row) => {
+            const monthlyImpact = paymentToAnnual(row.repaymentDifference, row.frequency) / 12;
+            return `Loan part ${row.index}: current rate ${percent(row.currentRate)} compared with ${percent(
+              row.marketRate
+            )} from ${row.comparisonSource || "Five-bank average"} for ${row.marketTerm}; difference ${row.difference >= 0 ? "+" : ""}${percent(
+              row.difference
+            )}; estimated monthly impact ${monthlyImpact >= 0 ? "+" : ""}${currency(monthlyImpact)}.`;
+          })
+          .join(" ")
+      : "Market comparison is unavailable until loan-part and rate data are complete.";
 
-  const structureSentence = `${currency(totalDebt)} is split across ${tranches.length} ${
+  const structureSentence = `${currency(totalDebt)} is shown across ${tranches.length} ${
     tranches.length === 1 ? "loan part" : "loan parts"
-  } with a weighted blended rate of ${percent(weightedRate)}, which is ${
-    blendedPremium >= 0 ? `${percent(blendedPremium)} above` : `${percent(Math.abs(blendedPremium))} below`
-  } the current 1-year market average used in this calculator (${percent(oneYearRate)}).`;
-  const expirySentence = `The next fixed-term date shown is Part ${upcomingTranche?.index ?? 1}, with ${currency(
-    upcomingBalance
-  )} expiring in ${monthsLabel(upcomingMonths)}; the forecast view uses an OCR path from ${percent(currentOcr)} to ${percent(
-    forecastOcr
-  )} and estimates a base-case repayment change of ${baseRepaymentChange >= 0 ? "+" : ""}${currency(
-    baseRepaymentChange
-  )}/${frequencyShort}.`;
-  const cashFlowSentence =
-    surplus > 0
-      ? `Based on the income and outgoing costs entered, the calculator shows ${currency(
-          cashAfterRepayment
-        )}/${frequencyShort} remaining after repayments and ${currency(surplus)}/${frequencyShort} remaining after declared outgoings, with a DTI estimate of ${dtiRatio.toFixed(
-          2
-        )}x.`
-      : `Based on the income and outgoing costs entered, the calculator shows ${currency(
-          cashAfterRepayment
-        )}/${frequencyShort} remaining after repayments and ${currency(surplus)}/${frequencyShort} remaining after declared outgoings, with a DTI estimate of ${dtiRatio.toFixed(
-          2
-        )}x.`;
+  } with a weighted average rate of ${percent(weightedRate)}.`;
+  const repaymentSentence = `Current monthly repayment is ${currency(monthlyRepayment)}. The selected cash-flow view shows ${currency(
+    summary.repayment
+  )} every ${frequencyLabel}.`;
+  const cashFlowSentence = `Cash after the standard mortgage repayment is ${currency(
+    monthlyCashAfterRepayment
+  )} per month. DTI is an estimate of ${dtiRatio.toFixed(2)}x from the debt and income entered.`;
+  const refixSentence = `Selected re-fix scenario: Loan part ${selectedForecastTranche?.index ?? 1}, ${selectedForecastRow?.label ?? "1 year"} fixed in ${
+    selectedForecastRow?.refixPointLabel ?? "now"
+  }. It uses an OCR path from ${percent(currentOcr)} to ${percent(forecastOcr)}, a forecast mortgage rate of ${percent(
+    selectedForecastScenario?.forecastMortgageRate ?? selectedForecastRow?.forecastMortgageRate ?? 0
+  )}, an estimated monthly repayment of ${currency(selectedRepayment)}, and a monthly impact of ${
+    baseRepaymentChange >= 0 ? "+" : ""
+  }${currency(baseRepaymentChange)}. Balance at re-fix is estimated at ${currency(selectedBalance)}.`;
+  const optionalScenarioSentence = `Optional top-up/living-cost scenario: extra repayment is ${currency(
+    topUpMonthly
+  )} per month and living costs entered are about ${currency(livingCostsMonthly)} per month. The calculator shows ${currency(
+    cashAfterOutgoingsMonthly
+  )} per month after mortgage, top-up, and living costs; modelled interest difference is ${currency(
+    summary.interestSaved
+  )} and modelled time difference is ${yearsAndMonths(summary.timeSavedPeriods, primaryFrequency)}.`;
+  const disclaimer =
+    "This is a calculator summary only. It is not financial advice, credit advice, or a lending approval. Rates, forecasts, eligibility, fees, tax treatment, and repayments can change; confirm details with a licensed mortgage adviser or lender.";
 
   return {
-    bullets: [
+    items: [
       { label: "Loan structure", copy: structureSentence },
-      { label: "Next fixed-term date", copy: expirySentence },
-      { label: "Cash-flow snapshot", copy: cashFlowSentence }
+      { label: "Current repayment", copy: repaymentSentence },
+      { label: "Cash after repayment and DTI", copy: cashFlowSentence },
+      { label: "Market comparison", copy: marketComparisonCopy },
+      { label: "Selected re-fix scenario", copy: refixSentence },
+      { label: "Optional top-up and living costs", copy: optionalScenarioSentence }
     ],
-    closingSentence:
-      "This is a calculator summary only, not financial advice; speak with a licensed mortgage adviser before making lending, refinancing, or re-fixing decisions.",
+    plainText: [
+      structureSentence,
+      repaymentSentence,
+      cashFlowSentence,
+      marketComparisonCopy,
+      refixSentence,
+      optionalScenarioSentence,
+      disclaimer
+    ].join("\n\n"),
+    disclaimer,
     dtiRatio,
     dti,
-    extraImpact:
-      extra > 0
-        ? `Optional top-up model: ${currency(extra)}/${frequencyShort} could save ${currency(
-            summary.interestSaved
-          )} and shorten the loan by ${yearsAndMonths(summary.timeSavedPeriods, primaryFrequency)}.`
-        : ""
+    repaymentToIncome,
+    frequencyShort
   };
 }

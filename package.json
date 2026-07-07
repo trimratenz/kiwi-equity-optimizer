@@ -4,10 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
+    "server": "node server/index.mjs",
     "build": "vite build",
     "preview": "vite preview",
-    "test:form": "node scripts/form-state-smoke-test.mjs"
+    "test": "npm run test:form && npm run test:golden && npm run test:refix && npm run test:snapshots && npm run test:summary && npm run test:backend",
+    "test:form": "node scripts/form-state-smoke-test.mjs",
+    "test:golden": "node scripts/calculation-golden-test.mjs",
+    "test:refix": "node scripts/refix-scenario-selection-test.mjs",
+    "test:snapshots": "node scripts/snapshot-layer-test.mjs",
+    "test:summary": "node scripts/summary-payload-test.mjs",
+    "test:backend": "node scripts/backend-api-test.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",
