@@ -6,6 +6,7 @@ data/
 .vite-dev.pid
 .env
 .env.*
+!.env.example
 
 .DS_Store
 Thumbs.db

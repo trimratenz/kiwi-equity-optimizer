@@ -84,6 +84,7 @@ const content = buildPlainEnglishSummary({
 const bannedSummaryTerms = /\b(should|best|recommend|choose this|you need to)\b/i;
 assert.equal(bannedSummaryTerms.test(content.plainText), false, "summary avoids directive advice language");
 assert.ok(content.plainText.includes("Current monthly repayment"), "summary includes current monthly repayment");
+assert.ok(content.plainText.includes("calculated minimum repayment"), "summary explains repayment source");
 assert.ok(content.plainText.includes("DTI is an estimate"), "summary includes estimated DTI");
 assert.ok(content.plainText.includes("Five-bank average"), "summary includes market comparison source");
 assert.ok(content.plainText.includes("Selected re-fix scenario"), "summary includes selected re-fix scenario");

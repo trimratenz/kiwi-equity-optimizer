@@ -130,8 +130,34 @@ export function RateStressStep({
               </div>
               <div className="rounded-lg border border-[#E2DDD5] bg-[#F7F5F0] p-4 text-sm leading-6 text-[#7B756E]">
                 <p>
-                  OCR snapshot: {selectedTerm.forecastSource}, last refreshed {selectedTerm.ocrLastRefreshed}. Current OCR
-                  {percent(selectedTerm.currentOcr)} to {percent(selectedTerm.forecastOcr)} at re-fix.
+                  OCR snapshot:{" "}
+                  {selectedTerm.forecastSourceUrl ? (
+                    <a
+                      href={selectedTerm.forecastSourceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-bold text-[#3A6047] underline-offset-2 hover:underline"
+                    >
+                      {selectedTerm.forecastSource}
+                    </a>
+                  ) : (
+                    selectedTerm.forecastSource
+                  )}
+                  , last reviewed {selectedTerm.ocrLastRefreshed}.{" "}
+                  {selectedTerm.currentOcrSourceUrl ? (
+                    <a
+                      href={selectedTerm.currentOcrSourceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-bold text-[#3A6047] underline-offset-2 hover:underline"
+                    >
+                      Current OCR {percent(selectedTerm.currentOcr)}
+                    </a>
+                  ) : (
+                    <>Current OCR {percent(selectedTerm.currentOcr)}</>
+                  )}{" "}
+                  as at {selectedTerm.currentOcrUpdatedAt || selectedTerm.ocrLastRefreshed} to{" "}
+                  {percent(selectedTerm.forecastOcr)} for the {selectedTerm.forecastQuarterDate} quarter forecast.
                 </p>
               </div>
             </div>

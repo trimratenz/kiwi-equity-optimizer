@@ -21,6 +21,24 @@ npm run build
 
 The test suite covers form state, calculation outputs, re-fix scenario selection, snapshot handling, summary payloads, and backend analytics/lead privacy boundaries.
 
+## Production deploy
+
+The frontend is ready for Vercel through the included `vercel.json`:
+
+- Framework preset: Vite
+- Install command: `npm install`
+- Build command: `npm run build`
+- Output directory: `dist`
+
+Recommended Vercel setup:
+
+1. Push this repo to GitHub.
+2. In Vercel, import `trimratenz/kiwi-equity-optimizer`.
+3. Keep the default Vite project settings, or let `vercel.json` provide them.
+4. Set `VITE_API_BASE_URL` only if the analytics/lead backend is hosted separately. Leave it blank for a frontend-only deployment.
+
+GitHub Actions runs `npm test` and `npm run build` on pushes to `master`/`main` and on pull requests.
+
 ## Backend, analytics, and admin
 
 TrimRate includes a small Node HTTP backend using file-backed JSON collections under `data/`. The public app can only write analytics, calculator runs, and consented leads. Lead reads, dashboard metrics, and CSV export are only available through authenticated admin routes.
@@ -40,6 +58,8 @@ For Vite development against a separately running backend, set:
 ```powershell
 $env:VITE_API_BASE_URL="http://127.0.0.1:8787"
 ```
+
+Production backend note: the current backend uses file-backed JSON storage. That is suitable for a persistent Node host with a writable disk, but not for durable lead/admin storage on Vercel serverless by itself. For production leads and admin reporting, host `npm run server` on a persistent Node platform or replace the storage layer with a managed database, then point the Vercel frontend at it with `VITE_API_BASE_URL`.
 
 Collections created by the backend:
 

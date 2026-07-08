@@ -43,6 +43,7 @@ export function LoanStructureStep({
         <div className="space-y-4">
           {displayedTranches.map((tranche, index) => {
             const normalized = normalizedTranches[index];
+            const frequencyLabel = FREQUENCY_CONFIG[normalized?.frequency || tranche.frequency]?.label || "period";
 
             return (
               <div key={tranche.id} className="rounded-xl border border-[#E2DDD5] bg-[#FFFEFC] p-4 sm:p-5">
@@ -86,7 +87,10 @@ export function LoanStructureStep({
                   )}
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="Interest rate" error={normalized?.rate <= 0 ? "Add the current rate for this loan part." : undefined}>
+                    <Field
+                      label="Interest rate"
+                      error={!normalized?.hasInterestRate ? "Add the current rate for this loan part." : undefined}
+                    >
                       <NumberInput
                         value={tranche.rate}
                         onChange={(value) => updateTranche(tranche.id, { rate: value })}
@@ -105,6 +109,33 @@ export function LoanStructureStep({
                       />
                     </Field>
                   </div>
+
+                  <Field
+                    label="Current repayment"
+                    hint={
+                      normalized?.amount > 0 && normalized?.hasInterestRate
+                        ? `Optional, per ${frequencyLabel}. Minimum calculated: ${currency(
+                            normalized.calculatedMinimumRepaymentExact
+                          )} per ${frequencyLabel}`
+                        : `Optional, per ${frequencyLabel}`
+                    }
+                    error={
+                      normalized?.repaymentValidationError
+                        ? `Current repayment must be at least the calculated minimum of ${currency(
+                            normalized.repaymentValidationError.minimumRepaymentRounded
+                          )} per ${frequencyLabel}.`
+                        : undefined
+                    }
+                  >
+                    <NumberInput
+                      value={tranche.repaymentAmount}
+                      onChange={(value) => updateTranche(tranche.id, { repaymentAmount: value })}
+                      step={10}
+                      prefix="$"
+                      placeholder="Use calculated"
+                      thousands
+                    />
+                  </Field>
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Field label="Type">

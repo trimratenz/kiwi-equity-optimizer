@@ -34,20 +34,38 @@ export const DEFAULT_BANK_RATE_SNAPSHOT = createBankRateSnapshot({
 export const DEFAULT_OCR_FORECAST_SNAPSHOT = createOcrForecastSnapshot({
   id: "ocr-rbnz-mps-may-2026",
   source: "RBNZ Monetary Policy Statement May 2026 OCR track",
-  currentOcr: 2.25,
-  capturedAt: "2026-05-28",
-  reviewedAt: "2026-05-28",
+  currentOcr: 2.5,
+  currentOcrSourceUrl: "https://www.rbnz.govt.nz/monetary-policy/about-monetary-policy/the-official-cash-rate",
+  currentOcrUpdatedAt: "2026-07-08",
+  sourceUrl:
+    "https://www.rbnz.govt.nz/monetary-policy/monetary-policy-statement/monetary-policy-statement-filtered-listing-page/2026/may-270/monetary-policy-statement-may-2026/web-version",
+  capturedAt: "2026-06-03",
+  publishedAt: "2026-06-03",
+  reviewedAt: "2026-07-08",
+  lookupMethod: "quarter_containing_date",
   forecast: [
-    { date: "2027-01-07", ocr: 2.6 },
-    { date: "2027-07-07", ocr: 2.55 },
-    { date: "2028-01-07", ocr: 2.5 },
-    { date: "2028-07-07", ocr: 2.45 },
-    { date: "2029-07-07", ocr: 2.45 },
-    { date: "2030-07-07", ocr: 2.45 },
-    { date: "2031-07-07", ocr: 2.45 }
+    { date: "2026-06-30", ocr: 2.3 },
+    { date: "2026-09-30", ocr: 2.5 },
+    { date: "2026-12-31", ocr: 2.8 },
+    { date: "2027-03-31", ocr: 3.0 },
+    { date: "2027-06-30", ocr: 3.1 },
+    { date: "2027-09-30", ocr: 3.1 },
+    { date: "2027-12-31", ocr: 3.1 },
+    { date: "2028-03-31", ocr: 3.2 },
+    { date: "2028-06-30", ocr: 3.2 },
+    { date: "2028-09-30", ocr: 3.2 },
+    { date: "2028-12-31", ocr: 3.3 },
+    { date: "2029-03-31", ocr: 3.3 },
+    { date: "2029-06-30", ocr: 3.3 }
   ],
-  reviewEvents: ["2026-05-28"]
+  reviewEvents: ["2026-06-03"]
 });
+
+export const LATEST_KNOWN_RBNZ_MPS = {
+  title: "Monetary Policy Statement May 2026",
+  publishedAt: "2026-06-03",
+  url: DEFAULT_OCR_FORECAST_SNAPSHOT.sourceUrl
+};
 
 export function termFromMonths(months) {
   return TERM_BY_MONTHS.get(Number(months)) ?? null;
@@ -178,17 +196,35 @@ export function evaluateBankRateSnapshotWarnings(snapshot, asOfDate = new Date()
     : [];
 }
 
-export function createOcrForecastSnapshot({ id, source, currentOcr, capturedAt, reviewedAt, forecast = [], reviewEvents = [] }) {
+export function createOcrForecastSnapshot({
+  id,
+  source,
+  sourceUrl = "",
+  currentOcr,
+  currentOcrSourceUrl = "",
+  currentOcrUpdatedAt = "",
+  capturedAt,
+  publishedAt = capturedAt,
+  reviewedAt,
+  lookupMethod = "interpolate",
+  forecast = [],
+  reviewEvents = []
+}) {
   const snapshotId = id || `ocr-forecast-${capturedAt || "unknown"}`;
 
   return {
     id: snapshotId,
     type: "ocr-forecast-snapshot",
     source,
+    sourceUrl,
     currentOcr: Number(currentOcr),
+    currentOcrSourceUrl,
+    currentOcrUpdatedAt,
     capturedAt,
+    publishedAt,
     reviewedAt,
     lastRefreshed: reviewedAt || capturedAt,
+    lookupMethod,
     forecast: forecast
       .map((point) => ({ date: point.date, ocr: Number(point.ocr) }))
       .sort((a, b) => parseDate(a.date) - parseDate(b.date)),
@@ -204,18 +240,31 @@ export function lookupOcrForecastByDate(snapshot, refixDate) {
       date: formatDate(target) || "",
       ocr: snapshot?.currentOcr ?? 0,
       source: snapshot?.source ?? "",
+      sourceUrl: snapshot?.sourceUrl ?? "",
       snapshotId: snapshot?.id ?? ""
     };
   }
 
   const exact = forecast.find((point) => point.date === formatDate(target));
-  if (exact) return { ...exact, source: snapshot.source, snapshotId: snapshot.id };
+  if (exact) return { ...exact, source: snapshot.source, sourceUrl: snapshot.sourceUrl, snapshotId: snapshot.id };
+
+  if (snapshot.lookupMethod === "quarter_containing_date") {
+    const quarterPoint = forecast.find((point) => parseDate(point.date) >= target) ?? forecast.at(-1);
+    return {
+      ...quarterPoint,
+      lookupDate: formatDate(target),
+      source: snapshot.source,
+      sourceUrl: snapshot.sourceUrl,
+      snapshotId: snapshot.id,
+      lookupMethod: snapshot.lookupMethod
+    };
+  }
 
   const previous = forecast.filter((point) => parseDate(point.date) < target).at(-1);
   const next = forecast.find((point) => parseDate(point.date) > target);
-  if (!previous && !next) return { ...forecast[0], source: snapshot.source, snapshotId: snapshot.id };
-  if (!previous) return { ...next, source: snapshot.source, snapshotId: snapshot.id };
-  if (!next) return { ...previous, source: snapshot.source, snapshotId: snapshot.id };
+  if (!previous && !next) return { ...forecast[0], source: snapshot.source, sourceUrl: snapshot.sourceUrl, snapshotId: snapshot.id };
+  if (!previous) return { ...next, source: snapshot.source, sourceUrl: snapshot.sourceUrl, snapshotId: snapshot.id };
+  if (!next) return { ...previous, source: snapshot.source, sourceUrl: snapshot.sourceUrl, snapshotId: snapshot.id };
 
   const previousDate = parseDate(previous.date);
   const nextDate = parseDate(next.date);
@@ -225,6 +274,7 @@ export function lookupOcrForecastByDate(snapshot, refixDate) {
     date: formatDate(target),
     ocr: previous.ocr + (next.ocr - previous.ocr) * progress,
     source: snapshot.source,
+    sourceUrl: snapshot.sourceUrl,
     snapshotId: snapshot.id,
     interpolatedFrom: [previous.date, next.date]
   };
@@ -242,6 +292,24 @@ export function evaluateOcrForecastWarnings(snapshot, latestRbnzEventDate) {
       message: `OCR forecast snapshot ${snapshot.id} has not been reviewed after ${formatDate(latestEvent)}.`,
       latestRbnzEventDate: formatDate(latestEvent),
       reviewedAt: formatDate(reviewedAt),
+      snapshotId: snapshot.id
+    }
+  ];
+}
+
+export function evaluateLatestMpsWarnings(snapshot, latestMps = {}) {
+  const snapshotPublishedAt = parseDate(snapshot?.publishedAt || snapshot?.capturedAt);
+  const latestPublishedAt = parseDate(latestMps.publishedAt);
+  if (!snapshotPublishedAt || !latestPublishedAt || snapshotPublishedAt >= latestPublishedAt) return [];
+
+  return [
+    {
+      code: "ocr-forecast-mps-outdated",
+      severity: "warning",
+      message: `OCR forecast snapshot ${snapshot.id} is based on an older MPS than ${latestMps.title || "the latest MPS"}.`,
+      snapshotPublishedAt: formatDate(snapshotPublishedAt),
+      latestMpsPublishedAt: formatDate(latestPublishedAt),
+      latestMpsUrl: latestMps.url || "",
       snapshotId: snapshot.id
     }
   ];

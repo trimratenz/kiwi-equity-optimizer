@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import {
   balanceAfterMonths,
+  buildLoanPartRepaymentDetails,
+  calculateMinimumRepaymentExact,
   calculateLoanPartRepayment,
   cashAfterMortgageTopUpAndLivingCosts,
   cashAfterRepayment,
@@ -8,6 +10,7 @@ import {
   remainingPrincipalAndInterestToFixedEnd,
   repaymentToIncomeRatio,
   summarizeMortgage,
+  totalRepaymentAcrossLoanParts,
   weightedAverageRate
 } from "../src/financialModel.js";
 
@@ -91,6 +94,167 @@ assertClose(
   }),
   2082.465335809871,
   "cash after mortgage, top-up, and living costs"
+);
+
+const trimRateFortnightlyParts = [
+  {
+    id: "trimrate-part-1",
+    amount: 395000,
+    rate: 5.13,
+    termYears: 30,
+    type: "Fixed",
+    frequency: "Fortnightly",
+    repaymentAmount: 989.55,
+    fixedTermMonths: 36,
+    fixedMonths: 36
+  },
+  {
+    id: "trimrate-part-2",
+    amount: 270000,
+    rate: 4.59,
+    termYears: 30,
+    type: "Fixed",
+    frequency: "Fortnightly",
+    repaymentAmount: "",
+    fixedTermMonths: 24,
+    fixedMonths: 24
+  },
+  {
+    id: "trimrate-part-3",
+    amount: 200000,
+    rate: 4.44,
+    termYears: 30,
+    type: "Fixed",
+    frequency: "Fortnightly",
+    repaymentAmount: "",
+    fixedTermMonths: 24,
+    fixedMonths: 24
+  }
+];
+trimRateFortnightlyParts[0].repaymentAmount = "";
+
+const trimRateFortnightlySummary = summarizeMortgage({
+  tranches: trimRateFortnightlyParts,
+  displayFrequency: "Fortnightly"
+});
+const part1Repayment = buildLoanPartRepaymentDetails({
+  principal: 395000,
+  annualRate: 5.13,
+  years: 30,
+  frequency: "Fortnightly"
+});
+const part2Repayment = buildLoanPartRepaymentDetails({
+  principal: 270000,
+  annualRate: 4.59,
+  years: 30,
+  frequency: "Fortnightly"
+});
+const part3Repayment = buildLoanPartRepaymentDetails({
+  principal: 200000,
+  annualRate: 4.44,
+  years: 30,
+  frequency: "Fortnightly"
+});
+
+assertClose(part1Repayment.calculatedMinimumRepaymentExact, 992.7225264906324, "part 1 minimum fortnightly repayment");
+assert.equal(part1Repayment.calculatedMinimumRepaymentRounded, 993, "part 1 display repayment");
+assert.equal(part1Repayment.repaymentSource, "calculated", "part 1 repayment source");
+assertClose(part2Repayment.calculatedMinimumRepaymentExact, 637.784271511947, "part 2 minimum fortnightly repayment");
+assert.equal(part2Repayment.calculatedMinimumRepaymentRounded, 638, "part 2 display repayment");
+assert.equal(part2Repayment.repaymentSource, "calculated", "part 2 repayment source");
+assertClose(part3Repayment.calculatedMinimumRepaymentExact, 464.2037813580389, "part 3 minimum fortnightly repayment");
+assert.equal(part3Repayment.calculatedMinimumRepaymentRounded, 464, "part 3 display repayment");
+assert.equal(part3Repayment.repaymentSource, "calculated", "part 3 repayment source");
+assertClose(trimRateFortnightlySummary.repayment, 2094.7105793606183, "total calculated fortnightly repayment");
+assert.equal(Math.round(trimRateFortnightlySummary.repayment), 2095, "display total fortnightly repayment");
+assertClose((trimRateFortnightlySummary.repayment * 26) / 12, 4538.539588614673, "monthly equivalent exact");
+assert.equal(Math.round((trimRateFortnightlySummary.repayment * 26) / 12), 4539, "display monthly equivalent");
+assert.equal(Number(weightedAverageRate(trimRateFortnightlyParts).toFixed(2)), 4.8, "weighted average rate rounded");
+
+const overrideParts = trimRateFortnightlyParts.map((part, index) => ({
+  ...part,
+  repaymentAmount: index === 0 ? 1100 : ""
+}));
+const overrideSummary = summarizeMortgage({
+  tranches: overrideParts,
+  displayFrequency: "Fortnightly"
+});
+const overridePart1 = buildLoanPartRepaymentDetails({
+  principal: 395000,
+  annualRate: 5.13,
+  years: 30,
+  frequency: "Fortnightly",
+  userCurrentRepayment: 1100
+});
+assertClose(overridePart1.effectiveCurrentRepaymentExact, 1100, "part 1 valid override effective repayment");
+assert.equal(overridePart1.repaymentSource, "user_override", "part 1 valid override source");
+assertClose(calculateLoanPartRepayment(overrideParts[1]), 637.784271511947, "part 2 remains calculated");
+assertClose(calculateLoanPartRepayment(overrideParts[2]), 464.2037813580389, "part 3 remains calculated");
+assertClose(overrideSummary.repayment, 2201.988052869986, "total override fortnightly repayment");
+assert.equal(Math.round(overrideSummary.repayment), 2202, "display override fortnightly repayment");
+assert.equal(Math.round((overrideSummary.repayment * 26) / 12), 4771, "display override monthly equivalent");
+
+const invalidOverride = buildLoanPartRepaymentDetails({
+  principal: 395000,
+  annualRate: 5.13,
+  years: 30,
+  frequency: "Fortnightly",
+  userCurrentRepayment: 900
+});
+assert.equal(invalidOverride.repaymentValidationError.code, "current-repayment-below-minimum", "invalid override error");
+assertClose(
+  invalidOverride.effectiveCurrentRepaymentExact,
+  992.7225264906324,
+  "invalid override falls back to calculated minimum"
+);
+assert.equal(invalidOverride.repaymentSource, "calculated", "invalid override is not used");
+
+assertClose(
+  calculateMinimumRepaymentExact({ principal: 500000, annualRate: 5, years: 30, frequency: "Monthly" }),
+  2684.108115060699,
+  "edge monthly repayment"
+);
+assertClose(
+  calculateMinimumRepaymentExact({ principal: 500000, annualRate: 5, years: 30, frequency: "Fortnightly" }),
+  1238.2212258492025,
+  "edge fortnightly repayment"
+);
+assertClose(
+  calculateMinimumRepaymentExact({ principal: 500000, annualRate: 5, years: 30, frequency: "Weekly" }),
+  618.9824593144447,
+  "edge weekly repayment"
+);
+assertClose(
+  calculateMinimumRepaymentExact({ principal: 120000, annualRate: 0, years: 10, frequency: "Monthly" }),
+  1000,
+  "edge zero interest repayment"
+);
+assertClose(
+  calculateMinimumRepaymentExact({ principal: 1000, annualRate: 5, years: 30, frequency: "Monthly" }),
+  5.368216230121398,
+  "edge small loan balance"
+);
+assertClose(
+  calculateMinimumRepaymentExact({ principal: 500000, annualRate: 15, years: 30, frequency: "Monthly" }),
+  6322.220107825217,
+  "edge high interest rate"
+);
+assertClose(
+  calculateMinimumRepaymentExact({ principal: 12000, annualRate: 5, years: 1, frequency: "Monthly" }),
+  1027.2897814616085,
+  "edge one-year loan term"
+);
+assertClose(
+  totalRepaymentAcrossLoanParts(
+    [
+      { amount: 100000, rate: 5, termYears: 30, frequency: "Weekly" },
+      { amount: 100000, rate: 5, termYears: 30, frequency: "Fortnightly" },
+      { amount: 100000, rate: 5, termYears: 30, frequency: "Monthly" }
+    ],
+    "Monthly"
+  ),
+  1609.8356189526462,
+  "edge mixed frequencies annualise to monthly equivalent"
 );
 
 console.log("Calculation golden test passed");

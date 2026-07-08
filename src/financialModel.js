@@ -13,8 +13,8 @@ export const FREQUENCY_CONFIG = {
   Monthly: { periodsPerYear: 12, label: "month", short: "mo" }
 };
 
-export const CALCULATION_AS_OF_DATE = "2026-07-07";
-export const CALCULATION_ENGINE_VERSION = "trimrate-calculation-engine-2026-07-07.1";
+export const CALCULATION_AS_OF_DATE = "2026-07-08";
+export const CALCULATION_ENGINE_VERSION = "trimrate-calculation-engine-2026-07-08.1";
 
 export const CURRENT_OCR_ASSUMPTION = DEFAULT_OCR_FORECAST_SNAPSHOT.currentOcr;
 
@@ -22,10 +22,14 @@ export const RBNZ_OCR_FORECAST_SOURCE = {
   id: DEFAULT_OCR_FORECAST_SNAPSHOT.id,
   source: DEFAULT_OCR_FORECAST_SNAPSHOT.source,
   url: "https://www.rbnz.govt.nz/monetary-policy/monetary-policy-statement",
+  sourceUrl: DEFAULT_OCR_FORECAST_SNAPSHOT.sourceUrl,
+  currentOcrSourceUrl: DEFAULT_OCR_FORECAST_SNAPSHOT.currentOcrSourceUrl,
+  currentOcrUpdatedAt: DEFAULT_OCR_FORECAST_SNAPSHOT.currentOcrUpdatedAt,
   publicationsUrl: "https://www.rbnz.govt.nz/research-and-publications/publications/publications-library",
-  ocrDecisionsUrl: "https://www.rbnz.govt.nz/monetary-policy/about-monetary-policy/official-cash-rate",
+  ocrDecisionsUrl: DEFAULT_OCR_FORECAST_SNAPSHOT.currentOcrSourceUrl,
   note: USER_RATE_DATA_NOTICE,
   capturedAt: DEFAULT_OCR_FORECAST_SNAPSHOT.capturedAt,
+  publishedAt: DEFAULT_OCR_FORECAST_SNAPSHOT.publishedAt,
   reviewedAt: DEFAULT_OCR_FORECAST_SNAPSHOT.reviewedAt,
   forecast: DEFAULT_OCR_FORECAST_SNAPSHOT.forecast
 };
@@ -170,6 +174,12 @@ function safeMoney(value) {
   return Math.max(Number(value) || 0, 0);
 }
 
+function optionalMoney(value) {
+  if (value === undefined || value === null || String(value).trim() === "") return null;
+  const numeric = Number(String(value).replace(/,/g, ""));
+  return Number.isFinite(numeric) ? Math.max(numeric, 0) : null;
+}
+
 function safeFrequency(frequency = "Monthly") {
   return FREQUENCY_CONFIG[frequency] ? frequency : "Monthly";
 }
@@ -181,19 +191,35 @@ function periodsPerYear(frequency = "Monthly") {
 function normaliseLoanPart(part, fallbackFrequency = "Monthly") {
   const frequency = safeFrequency(part?.frequency || fallbackFrequency);
   const principal = safeMoney(part?.amount ?? part?.principal ?? part?.balance);
+  const rate = Number(part?.rate ?? part?.annualRate) || 0;
+  const termYears = Math.max(Number(part?.termYears ?? part?.years) || 1, 1);
+  const repayment = buildLoanPartRepaymentDetails({
+    principal,
+    annualRate: rate,
+    years: termYears,
+    frequency,
+    userCurrentRepayment: part?.userCurrentRepaymentExact ?? part?.repaymentAmount ?? part?.repayment
+  });
 
   return {
     ...part,
     amount: principal,
     principal,
-    rate: Number(part?.rate ?? part?.annualRate) || 0,
-    termYears: Math.max(Number(part?.termYears ?? part?.years) || 1, 1),
+    rate,
+    termYears,
+    repaymentAmount: repayment.effectiveCurrentRepaymentExact,
+    calculatedMinimumRepaymentExact: repayment.calculatedMinimumRepaymentExact,
+    calculatedMinimumRepaymentRounded: repayment.calculatedMinimumRepaymentRounded,
+    userCurrentRepaymentExact: repayment.userCurrentRepaymentExact,
+    effectiveCurrentRepaymentExact: repayment.effectiveCurrentRepaymentExact,
+    repaymentSource: repayment.repaymentSource,
+    repaymentValidationError: repayment.repaymentValidationError,
     frequency,
     fixedMonths: Math.max(Number(part?.fixedMonths) || 0, 0)
   };
 }
 
-export function calculatePayment(principal, annualRate, years, frequency = "Monthly") {
+export function calculateMinimumRepaymentExact({ principal, annualRate, years, frequency = "Monthly" }) {
   const safePrincipal = safeMoney(principal);
   const safeYears = Math.max(Number(years) || 1, 1);
   const periodCount = periodsPerYear(frequency);
@@ -208,9 +234,46 @@ export function calculatePayment(principal, annualRate, years, frequency = "Mont
   );
 }
 
+export function calculatePayment(principal, annualRate, years, frequency = "Monthly") {
+  return calculateMinimumRepaymentExact({ principal, annualRate, years, frequency });
+}
+
+export function buildLoanPartRepaymentDetails({
+  principal,
+  annualRate,
+  years,
+  frequency = "Monthly",
+  userCurrentRepayment
+}) {
+  const calculatedMinimumRepaymentExact = calculateMinimumRepaymentExact({ principal, annualRate, years, frequency });
+  const calculatedMinimumRepaymentRounded = Math.round(calculatedMinimumRepaymentExact);
+  const userCurrentRepaymentExact = optionalMoney(userCurrentRepayment);
+  const hasUserRepayment = userCurrentRepaymentExact !== null;
+  const hasValidUserRepayment = hasUserRepayment && userCurrentRepaymentExact >= calculatedMinimumRepaymentExact;
+  const effectiveCurrentRepaymentExact = hasValidUserRepayment
+    ? userCurrentRepaymentExact
+    : calculatedMinimumRepaymentExact;
+
+  return {
+    calculatedMinimumRepaymentExact,
+    calculatedMinimumRepaymentRounded,
+    userCurrentRepaymentExact,
+    effectiveCurrentRepaymentExact,
+    repaymentSource: hasValidUserRepayment ? "user_override" : "calculated",
+    repaymentValidationError:
+      hasUserRepayment && !hasValidUserRepayment
+        ? {
+            code: "current-repayment-below-minimum",
+            minimumRepaymentExact: calculatedMinimumRepaymentExact,
+            minimumRepaymentRounded: calculatedMinimumRepaymentRounded
+          }
+        : null
+  };
+}
+
 export function calculateLoanPartRepayment(part, fallbackFrequency = "Monthly") {
   const normalised = normaliseLoanPart(part, fallbackFrequency);
-  return calculatePayment(normalised.principal, normalised.rate, normalised.termYears, normalised.frequency);
+  return normalised.effectiveCurrentRepaymentExact;
 }
 
 export function weightedAverageRate(tranches) {
@@ -241,6 +304,7 @@ export function amortizeLoanPart({
   annualRate,
   years,
   frequency = "Monthly",
+  repaymentAmount = 0,
   extraPayment = 0,
   interestOnlyYears = 0,
   maxPeriods
@@ -250,10 +314,13 @@ export function amortizeLoanPart({
   const safeFrequencyName = safeFrequency(frequency);
   const periodCount = periodsPerYear(safeFrequencyName);
   const periodicRate = (Number(annualRate) || 0) / 100 / periodCount;
-  const basePayment = calculatePayment(safePrincipal, annualRate, safeYears, safeFrequencyName);
+  const repaymentOverride = safeMoney(repaymentAmount);
+  const minimumPayment = calculatePayment(safePrincipal, annualRate, safeYears, safeFrequencyName);
+  const usesRepaymentOverride = repaymentOverride >= minimumPayment;
+  const basePayment = usesRepaymentOverride ? repaymentOverride : minimumPayment;
   const extraPerPeriod = safeMoney(extraPayment);
   const interestOnlyPeriods = Math.round(Math.max(Number(interestOnlyYears) || 0, 0) * periodCount);
-  const scheduledPeriods = Math.ceil(safeYears * periodCount);
+  const scheduledPeriods = usesRepaymentOverride ? Math.ceil(100 * periodCount) : Math.ceil(safeYears * periodCount);
   const periodLimit = Number.isFinite(maxPeriods) ? Math.max(Math.round(maxPeriods), 0) : scheduledPeriods;
   const rows = [];
   let balance = safePrincipal;
@@ -297,22 +364,31 @@ export function amortizeLoanPart({
   };
 }
 
-export function balanceAfterMonths({ principal, annualRate, years, frequency = "Monthly", months = 0 }) {
+export function balanceAfterMonths({ principal, annualRate, years, frequency = "Monthly", repaymentAmount = 0, months = 0 }) {
   return amortizeLoanPart({
     principal,
     annualRate,
     years,
     frequency,
+    repaymentAmount,
     maxPeriods: periodsForMonths(months, frequency)
   }).finalDebt;
 }
 
-export function principalAndInterestPaidAfterMonths({ principal, annualRate, years, frequency = "Monthly", months = 0 }) {
+export function principalAndInterestPaidAfterMonths({
+  principal,
+  annualRate,
+  years,
+  frequency = "Monthly",
+  repaymentAmount = 0,
+  months = 0
+}) {
   const schedule = amortizeLoanPart({
     principal,
     annualRate,
     years,
     frequency,
+    repaymentAmount,
     maxPeriods: periodsForMonths(months, frequency)
   });
 
@@ -335,6 +411,7 @@ export function remainingPrincipalAndInterestToFixedEnd(tranches, fallbackFreque
       annualRate: normalised.rate,
       years: normalised.termYears,
       frequency: normalised.frequency,
+      repaymentAmount: normalised.repaymentAmount,
       maxPeriods: periodsRemaining
     });
 
@@ -587,6 +664,7 @@ export function summarizeMortgage({
       annualRate: tranche.rate,
       years: tranche.termYears,
       frequency: tranche.frequency,
+      repaymentAmount: tranche.repaymentAmount,
       interestOnlyYears
     });
     const accelerated = amortizeLoanPart({
@@ -594,6 +672,7 @@ export function summarizeMortgage({
       annualRate: tranche.rate,
       years: tranche.termYears,
       frequency: tranche.frequency,
+      repaymentAmount: tranche.repaymentAmount,
       extraPayment: extrasByPart[index],
       interestOnlyYears
     });
@@ -676,7 +755,8 @@ export function trancheRows(tranches, fallbackFrequency) {
       principal: normalised.principal,
       annualRate: normalised.rate,
       years: normalised.termYears,
-      frequency: normalised.frequency
+      frequency: normalised.frequency,
+      repaymentAmount: normalised.repaymentAmount
     });
 
     return {
@@ -794,6 +874,7 @@ export function forecastRefixRows({
     annualRate: currentRate,
     years,
     frequency,
+    repaymentAmount: currentPayment,
     months: expiryMonths
   });
   const remainingYears = Math.max((years * 12 - expiryMonths) / 12, 1);
@@ -823,11 +904,16 @@ export function forecastRefixRows({
       forecastOcr,
       forecastSource: rbnzOcr.source,
       forecastDate: rbnzOcr.refixDate,
+      forecastSourceUrl: rbnzOcr.sourceUrl,
+      forecastQuarterDate: rbnzOcr.date,
+      forecastLookupMethod: rbnzOcr.lookupMethod,
       ocrSnapshotId: rbnzOcr.snapshotId,
       bankRateSnapshotId,
       dataNotice: USER_RATE_DATA_NOTICE,
       ocrLastRefreshed: ocrSnapshot.lastRefreshed,
       currentOcr: CURRENT_OCR_ASSUMPTION,
+      currentOcrSourceUrl: ocrSnapshot.currentOcrSourceUrl,
+      currentOcrUpdatedAt: ocrSnapshot.currentOcrUpdatedAt,
       marketRateToday,
       forecastMortgageRate: baseScenario.forecastMortgageRate,
       remainingBalance,
@@ -939,6 +1025,23 @@ export function buildPlainEnglishSummary({
   const structureSentence = `${currency(totalDebt)} is shown across ${tranches.length} ${
     tranches.length === 1 ? "loan part" : "loan parts"
   } with a weighted average rate of ${percent(weightedRate)}.`;
+  const minimumRepaymentAnnual = tranches.reduce((sum, tranche) => {
+    const minimum =
+      tranche.calculatedMinimumRepaymentExact ??
+      calculatePayment(tranche.amount ?? tranche.principal, tranche.rate, tranche.termYears, tranche.frequency || primaryFrequency);
+    return sum + paymentToAnnual(minimum, tranche.frequency || primaryFrequency);
+  }, 0);
+  const minimumRepayment = paymentFromAnnual(minimumRepaymentAnnual, primaryFrequency);
+  const hasRepaymentOverride = tranches.some((tranche) => tranche.repaymentSource === "user_override");
+  const repaymentSourceSentence = hasRepaymentOverride
+    ? `Current repayments: Your calculated minimum repayment is ${currency(
+        minimumRepayment
+      )} per ${frequencyLabel}. You entered higher current repayment amounts for at least one loan part, so the calculator uses ${currency(
+        summary.repayment
+      )} per ${frequencyLabel} in the scenarios below.`
+    : `Current repayments: Your calculated minimum repayment is ${currency(
+        minimumRepayment
+      )} per ${frequencyLabel}. No higher current repayment was entered, so the calculator uses the calculated repayment in the scenarios below.`;
   const repaymentSentence = `Current monthly repayment is ${currency(monthlyRepayment)}. The selected cash-flow view shows ${currency(
     summary.repayment
   )} every ${frequencyLabel}.`;
@@ -965,6 +1068,7 @@ export function buildPlainEnglishSummary({
   return {
     items: [
       { label: "Loan structure", copy: structureSentence },
+      { label: "Repayment source", copy: repaymentSourceSentence },
       { label: "Current repayment", copy: repaymentSentence },
       { label: "Cash after repayment and DTI", copy: cashFlowSentence },
       { label: "Market comparison", copy: marketComparisonCopy },
@@ -973,6 +1077,7 @@ export function buildPlainEnglishSummary({
     ],
     plainText: [
       structureSentence,
+      repaymentSourceSentence,
       repaymentSentence,
       cashFlowSentence,
       marketComparisonCopy,

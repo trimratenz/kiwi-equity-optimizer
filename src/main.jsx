@@ -15,6 +15,7 @@ import {
   FREQUENCY_CONFIG,
   MARKET_RATE_SNAPSHOT,
   buildPlainEnglishSummary,
+  buildLoanPartRepaymentDetails,
   buildRefixScenarioView,
   calculateLoanPartRepayment,
   currency,
@@ -32,7 +33,12 @@ import {
 } from "./financialModel";
 import { getInitialMortgageFormState, mortgageFormReducer, toNumber, toPositive } from "./mortgageFormState";
 import { fetchMortgageRates } from "./ratesApi";
-import { DEFAULT_OCR_FORECAST_SNAPSHOT, createCalculationRun } from "./snapshotLayer.js";
+import {
+  DEFAULT_OCR_FORECAST_SNAPSHOT,
+  LATEST_KNOWN_RBNZ_MPS,
+  createCalculationRun,
+  evaluateLatestMpsWarnings
+} from "./snapshotLayer.js";
 import { buildSummaryPayload, monthlyEquivalent } from "./summaryPayload.js";
 
 const FORM_STORAGE_KEY = "trimratenz-form";
@@ -135,33 +141,66 @@ function App() {
     };
   }, []);
 
+  const ocrForecastWarnings = useMemo(
+    () => evaluateLatestMpsWarnings(DEFAULT_OCR_FORECAST_SNAPSHOT, LATEST_KNOWN_RBNZ_MPS),
+    []
+  );
+  const dataWarnings = useMemo(
+    () => [...(marketRates.warnings || []), ...ocrForecastWarnings],
+    [marketRates.warnings, ocrForecastWarnings]
+  );
+
   useEffect(() => {
-    (marketRates.warnings || []).forEach((warning) => {
+    dataWarnings.forEach((warning) => {
       console.warn("TrimRate data warning", warning);
     });
-  }, [marketRates.warnings]);
+  }, [dataWarnings]);
 
   const loanAmount = toPositive(loanBalance);
   const isSplitLoan = loanStructure === "split";
   const displayedTranches = useMemo(() => (isSplitLoan ? tranches : tranches.slice(0, 1)), [isSplitLoan, tranches]);
   const normalizedTranches = useMemo(
     () =>
-      displayedTranches.map((tranche) => ({
-        ...tranche,
-        amount: isSplitLoan ? toPositive(tranche.amount) : loanAmount,
-        rate: toNumber(tranche.rate),
-        termYears: Math.max(toNumber(tranche.termYears), 1),
-        fixedTermMonths: tranche.type === "Fixed" ? Math.max(toNumber(tranche.fixedTermMonths || "12"), 0) : 0,
-        fixedMonths: tranche.type === "Fixed" ? Math.max(toNumber(tranche.fixedMonths), 0) : 0,
-        offsetBalance: Math.min(toPositive(tranche.offsetBalance), isSplitLoan ? toPositive(tranche.amount) : loanAmount)
-      })),
+      displayedTranches.map((tranche) => {
+        const amount = isSplitLoan ? toPositive(tranche.amount) : loanAmount;
+        const rate = toNumber(tranche.rate);
+        const termYears = Math.max(toNumber(tranche.termYears), 1);
+        const frequency = tranche.frequency || "Monthly";
+        const repaymentDetails = buildLoanPartRepaymentDetails({
+          principal: amount,
+          annualRate: rate,
+          years: termYears,
+          frequency,
+          userCurrentRepayment: tranche.repaymentAmount
+        });
+
+        return {
+          ...tranche,
+          amount,
+          rate,
+          hasInterestRate: String(tranche.rate ?? "").trim() !== "",
+          termYears,
+          repaymentAmount: toPositive(tranche.repaymentAmount),
+          calculatedMinimumRepaymentExact: repaymentDetails.calculatedMinimumRepaymentExact,
+          calculatedMinimumRepaymentRounded: repaymentDetails.calculatedMinimumRepaymentRounded,
+          userCurrentRepaymentExact: repaymentDetails.userCurrentRepaymentExact,
+          effectiveCurrentRepaymentExact: repaymentDetails.effectiveCurrentRepaymentExact,
+          repaymentSource: repaymentDetails.repaymentSource,
+          repaymentValidationError: repaymentDetails.repaymentValidationError,
+          frequency,
+          fixedTermMonths: tranche.type === "Fixed" ? Math.max(toNumber(tranche.fixedTermMonths || "12"), 0) : 0,
+          fixedMonths: tranche.type === "Fixed" ? Math.max(toNumber(tranche.fixedMonths), 0) : 0,
+          offsetBalance: Math.min(toPositive(tranche.offsetBalance), isSplitLoan ? toPositive(tranche.amount) : loanAmount)
+        };
+      }),
     [displayedTranches, isSplitLoan, loanAmount]
   );
   const mathTranches = useMemo(
     () =>
       normalizedTranches.map((tranche) => ({
         ...tranche,
-        amount: Math.max(tranche.amount - tranche.offsetBalance, 0)
+        amount: Math.max(tranche.amount - tranche.offsetBalance, 0),
+        repaymentAmount: tranche.effectiveCurrentRepaymentExact
       })),
     [normalizedTranches]
   );
@@ -172,16 +211,18 @@ function App() {
   const allTranchesComplete = normalizedTranches.every(
     (tranche) =>
       tranche.amount > 0 &&
-      tranche.rate > 0 &&
+      tranche.hasInterestRate &&
+      tranche.rate >= 0 &&
       tranche.termYears > 0 &&
       tranche.frequency &&
       tranche.type &&
-      (tranche.type === "Variable" || tranche.fixedMonths >= 0)
+      (tranche.type === "Variable" || tranche.fixedMonths >= 0) &&
+      !tranche.repaymentValidationError
   );
   const setupComplete = loanAmount > 0 && allTranchesComplete && splitMatches;
   const completionItems = [
     { label: "Loan balance", done: loanAmount > 0 },
-    { label: "Rate entered", done: normalizedTranches.every((tranche) => tranche.rate > 0) },
+    { label: "Rate entered", done: normalizedTranches.every((tranche) => tranche.hasInterestRate && tranche.rate >= 0) },
     { label: "Term checked", done: normalizedTranches.every((tranche) => tranche.termYears > 0) },
     { label: isSplitLoan ? "Split matches" : "Single loan", done: splitMatches }
   ];
@@ -268,6 +309,10 @@ function App() {
     () => remainingPrincipalAndInterestToFixedEnd(forecastTranches, primaryFrequency),
     [forecastTranches, primaryFrequency]
   );
+  const fixedEndPrincipalShare =
+    remainingFixedPayments.total > 0 ? (remainingFixedPayments.principal / remainingFixedPayments.total) * 100 : 0;
+  const fixedEndInterestShare =
+    remainingFixedPayments.total > 0 ? (remainingFixedPayments.interest / remainingFixedPayments.total) * 100 : 0;
   const tranchesWithPayments = useMemo(() => trancheRows(mathTranches, primaryFrequency), [mathTranches, primaryFrequency]);
   const payoffRows = summary.standard.rows.map((row, index) => ({
     year: row.year,
@@ -318,7 +363,10 @@ function App() {
       .sort((a, b) => a.rate - b.rate)[0];
     const comparisonRate = selectedBankRate?.rate ?? closestRate.rate;
     const comparisonSource = selectedBankRate?.institution ?? "Five-bank average";
-    const marketRepayment = calculateLoanPartRepayment({ ...tranche, rate: comparisonRate }, tranche.frequency);
+    const marketRepayment = calculateLoanPartRepayment(
+      { ...tranche, rate: comparisonRate, repaymentAmount: 0 },
+      tranche.frequency
+    );
     const currentRepayment = calculateLoanPartRepayment(tranche, tranche.frequency);
     const repaymentDifference = marketRepayment - currentRepayment;
 
@@ -420,7 +468,9 @@ function App() {
         bankRateSnapshotId: marketRates.snapshotId,
         bankRatesLastRefreshed: marketRates.lastRefreshed || marketRates.captured,
         ocrForecastSnapshotId: DEFAULT_OCR_FORECAST_SNAPSHOT.id,
-        ocrForecastLastRefreshed: DEFAULT_OCR_FORECAST_SNAPSHOT.lastRefreshed
+        ocrForecastLastRefreshed: DEFAULT_OCR_FORECAST_SNAPSHOT.lastRefreshed,
+        latestKnownMpsPublishedAt: LATEST_KNOWN_RBNZ_MPS.publishedAt,
+        warnings: dataWarnings
       },
       calculationRun: createCalculationRun({
         inputs: {
@@ -465,6 +515,7 @@ function App() {
       marketRates.snapshotId,
       marketRates.lastRefreshed,
       marketRates.captured,
+      dataWarnings,
       formState
     ]
   );
@@ -490,15 +541,22 @@ function App() {
             offsetBalance: tranche.offsetBalance,
             rate: tranche.rate,
             termYears: tranche.termYears,
-            type: tranche.type,
+            calculatedMinimumRepaymentExact: tranche.calculatedMinimumRepaymentExact,
+            calculatedMinimumRepaymentRounded: tranche.calculatedMinimumRepaymentRounded,
+            userCurrentRepaymentExact: tranche.userCurrentRepaymentExact,
+            effectiveCurrentRepaymentExact: tranche.effectiveCurrentRepaymentExact,
+            repaymentSource: tranche.repaymentSource,
             repaymentFrequency: tranche.frequency,
+            type: tranche.type,
             fixedTermMonths: tranche.fixedTermMonths,
             fixedEndsInMonths: tranche.fixedMonths
           }))
         },
         outputs: {
           currentMonthlyRepayment: monthlyEquivalent(summary.repayment, primaryFrequency),
+          currentMonthlyRepaymentRounded: Math.round(monthlyEquivalent(summary.repayment, primaryFrequency)),
           currentRepaymentPerSelectedPeriod: summary.repayment,
+          currentRepaymentPerSelectedPeriodRounded: Math.round(summary.repayment),
           selectedCashFlowFrequency: primaryFrequency,
           totalInterest: summary.totalInterest,
           cashAfterRepaymentPerSelectedPeriod: netCash.remainingCash,
@@ -609,7 +667,7 @@ function App() {
         id,
         field,
         value,
-        decimal: ["amount", "rate", "termYears", "fixedTermMonths", "fixedMonths", "offsetBalance"].includes(field)
+        decimal: ["amount", "rate", "termYears", "repaymentAmount", "fixedTermMonths", "fixedMonths", "offsetBalance"].includes(field)
       });
     });
   }
@@ -715,14 +773,22 @@ function App() {
                 sub={repaymentFrequencyNote}
                 icon={Banknote}
               />
-              <Stat label="Effective balance" value={currency(effectiveLoan)} sub="After offset/redraw" icon={SlidersHorizontal} />
-              <Stat label="Interest you'll pay" value={currency(summary.totalInterest)} sub="Current schedule" icon={CalendarClock} />
               <Stat
-                label="Remaining P&I to fixed end"
+                label="Remaining Principal"
+                value={currency(remainingFixedPayments.principal)}
+                sub={`${percent(fixedEndPrincipalShare, 0)} of payments before current fixed terms end`}
+                icon={SlidersHorizontal}
+              />
+              <Stat
+                label="Remaining Interest"
+                value={currency(remainingFixedPayments.interest)}
+                sub={`${percent(fixedEndInterestShare, 0)} of payments before current fixed terms end`}
+                icon={CalendarClock}
+              />
+              <Stat
+                label="Total P&I to Fixed End"
                 value={currency(remainingFixedPayments.total)}
-                sub={`${currency(remainingFixedPayments.principal)} principal + ${currency(
-                  remainingFixedPayments.interest
-                )} interest across ${remainingFixedPayments.periodsRemaining} scheduled repayments`}
+                sub={`${remainingFixedPayments.periodsRemaining} scheduled repayments before current fixed terms end`}
                 icon={CalendarClock}
               />
             </div>

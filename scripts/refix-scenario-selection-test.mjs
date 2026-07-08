@@ -49,6 +49,13 @@ function assertSelectedScenario(view, tranche, expectedBalance, expectedForecast
   assertClose(view.selectedForecastPayment, calculateLoanPartRepayment(tranche), "current repayment");
   assertClose(view.selectedForecastRow.remainingBalance, expectedBalance, "balance at re-fix");
   assertClose(view.selectedForecastRow.forecastOcr, expectedForecastOcr, "forecast OCR");
+  assert.equal(view.selectedForecastRow.forecastSourceUrl.includes("rbnz.govt.nz"), true, "forecast carries RBNZ source URL");
+  assert.equal(view.selectedForecastRow.currentOcr, 2.5, "forecast uses current official OCR");
+  assert.equal(
+    view.selectedForecastRow.currentOcrSourceUrl.includes("the-official-cash-rate"),
+    true,
+    "forecast carries current OCR source URL"
+  );
 
   const baseScenario = view.selectedForecastScenario;
   const expectedScenarioRepayment = calculatePayment(
@@ -78,8 +85,8 @@ const part2View = buildRefixScenarioView({
   fallbackFrequency: "Monthly"
 });
 
-assertSelectedScenario(part1View, tranches[0], 496012.21850776055, 2.6);
-assertSelectedScenario(part2View, tranches[1], 488794.4144798936, 2.5);
+assertSelectedScenario(part1View, tranches[0], 496012.21850776055, 3.0);
+assertSelectedScenario(part2View, tranches[1], 488794.4144798936, 3.2);
 assert.notEqual(part1View.selectedForecastTranche.id, part2View.selectedForecastTranche.id);
 assert.notEqual(part1View.selectedForecastRow.refixPointMonths, part2View.selectedForecastRow.refixPointMonths);
 assert.notEqual(part1View.selectedForecastRow.remainingBalance, part2View.selectedForecastRow.remainingBalance);

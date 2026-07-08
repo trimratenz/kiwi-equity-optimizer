@@ -16,6 +16,7 @@ state = reduce(state, { type: "SET_FIELD", field: "salaryIncome", value: "5000",
 assert.equal(state.tranches[0].termYears, "30", "Default loan term should be 30 years");
 state = reduce(state, { type: "UPDATE_TRANCHE", id: firstId, field: "rate", value: "5.75", decimal: true });
 state = reduce(state, { type: "UPDATE_TRANCHE", id: firstId, field: "termYears", value: "20", decimal: true });
+state = reduce(state, { type: "UPDATE_TRANCHE", id: firstId, field: "repaymentAmount", value: "989.55", decimal: true });
 state = reduce(state, { type: "UPDATE_TRANCHE", id: firstId, field: "type", value: "Variable" });
 state = reduce(state, { type: "UPDATE_TRANCHE", id: firstId, field: "frequency", value: "Fortnightly" });
 state = reduce(state, { type: "UPDATE_TRANCHE", id: firstId, field: "offsetBalance", value: "25000", decimal: true });
@@ -30,6 +31,7 @@ assert.equal(state.tranches[0].id, firstId, "Existing tranche key/id should be p
 assert.equal(state.tranches[0].amount, "", "Existing tranche amount should not be auto-filled from total balance");
 assert.equal(state.tranches[0].rate, "5.75", "Existing interest rate should be preserved");
 assert.equal(state.tranches[0].termYears, "20", "Existing term should be preserved");
+assert.equal(state.tranches[0].repaymentAmount, "989.55", "Existing current repayment should be preserved");
 assert.equal(state.tranches[0].type, "Variable", "Existing loan type should be preserved");
 assert.equal(state.tranches[0].frequency, "Fortnightly", "Existing repayment frequency should be preserved");
 assert.equal(state.tranches[0].offsetBalance, "25000", "Existing offset/redraw balance should be preserved");

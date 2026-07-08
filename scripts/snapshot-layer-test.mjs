@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import {
   averageRateForTerm,
+  DEFAULT_OCR_FORECAST_SNAPSHOT,
+  LATEST_KNOWN_RBNZ_MPS,
   createBankRateSnapshot,
   createCalculationRun,
   createOcrForecastSnapshot,
   evaluateBankRateSnapshotWarnings,
+  evaluateLatestMpsWarnings,
   evaluateOcrForecastWarnings,
   lookupOcrForecastByDate,
   lowestRateForTerm
@@ -52,19 +55,35 @@ assert.equal(staleWarnings[0].code, "bank-rates-stale", "bank rates older than 7
 
 const ocrSnapshot = createOcrForecastSnapshot({
   id: "fixture-ocr-mps-may-2026",
-  source: "RBNZ Monetary Policy Statement May 2026 OCR track",
+  source: "Fixture OCR forecast source",
   currentOcr: 2.25,
   capturedAt: "2026-05-28",
   reviewedAt: "2026-05-28",
   forecast: [{ date: "2027-01-07", ocr: 2.6 }]
 });
 const forecast = lookupOcrForecastByDate(ocrSnapshot, "2027-01-07");
-assert.equal(forecast.source, "RBNZ Monetary Policy Statement May 2026 OCR track", "OCR source");
+assert.equal(forecast.source, "Fixture OCR forecast source", "OCR source");
 assert.equal(forecast.ocr, 2.6, "OCR forecast by re-fix date");
 assert.equal(forecast.snapshotId, "fixture-ocr-mps-may-2026", "OCR lookup carries snapshot ID");
 
+const rbnzTableForecast = lookupOcrForecastByDate(DEFAULT_OCR_FORECAST_SNAPSHOT, "2027-01-07");
+assert.equal(rbnzTableForecast.ocr, 3.0, "RBNZ Table 6.1 quarter-containing OCR forecast");
+assert.equal(rbnzTableForecast.sourceUrl.includes("rbnz.govt.nz"), true, "RBNZ forecast carries source URL");
+
 const ocrWarnings = evaluateOcrForecastWarnings(ocrSnapshot, "2026-07-01");
 assert.equal(ocrWarnings[0].code, "ocr-forecast-review-stale", "OCR source review warning");
+
+const latestMpsWarnings = evaluateLatestMpsWarnings(ocrSnapshot, {
+  title: "Monetary Policy Statement August 2026",
+  publishedAt: "2026-08-12",
+  url: "https://www.rbnz.govt.nz/monetary-policy/monetary-policy-statement"
+});
+assert.equal(latestMpsWarnings[0].code, "ocr-forecast-mps-outdated", "newer MPS warning");
+assert.equal(
+  evaluateLatestMpsWarnings(DEFAULT_OCR_FORECAST_SNAPSHOT, LATEST_KNOWN_RBNZ_MPS).length,
+  0,
+  "current default OCR snapshot matches latest known MPS"
+);
 
 const calculationRun = createCalculationRun({
   id: "fixture-run",
