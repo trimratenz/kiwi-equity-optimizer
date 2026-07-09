@@ -863,13 +863,15 @@ export function buildPlainEnglishSummary({
   selectedForecastTranche,
   selectedForecastRow,
   selectedForecastScenario,
+  selectedForecastTermMonths,
   extraPayment,
   summary,
   periodIncome,
   repaymentToIncome,
   cashAfterRepayment,
   cashAfterOutgoings,
-  marketRateRows = []
+  marketRateRows = [],
+  marketRates = MARKET_RATE_SNAPSHOT.rates
 }) {
   const currentOcr = selectedForecastRow?.currentOcr ?? CURRENT_OCR_ASSUMPTION;
   const forecastOcr = selectedForecastRow?.forecastOcr ?? currentOcr;
@@ -964,6 +966,10 @@ export function buildPlainEnglishSummary({
       comparisonSource: row.comparisonSource || "Five-bank average"
     };
   });
+  const marketTotalMonthlyImpact = marketRateRows.reduce(
+    (sum, row) => sum + paymentToAnnual(row.repaymentDifference, row.frequency) / 12,
+    0
+  );
   const summaryStats = [
     {
       label: "Total loan",
@@ -1077,13 +1083,118 @@ export function buildPlainEnglishSummary({
       detail: `${currency(livingCostsMonthly)} living costs / mo`
     }
   ];
+  const scenarioTermMonths = selectedForecastRow?.months ?? selectedForecastTermMonths ?? 12;
+  const scenarioTermLabel =
+    FIXED_TERM_OPTIONS.find((term) => term.months === scenarioTermMonths)?.label ?? selectedForecastRow?.label ?? "1 year";
+  const timelineRows = tranches.map((tranche, index) => ({
+    label: `Part ${tranche.index ?? index + 1}`,
+    value: `refixes in ${monthsLabel(tranche.fixedMonths ?? 0)}`,
+    detail:
+      tranche.type === "Fixed"
+        ? `${currency(tranche.amount ?? 0)} currently fixed at ${percent(tranche.rate ?? 0)}`
+        : `${currency(tranche.amount ?? 0)} can be fixed now`
+  }));
+  const scenarioCards = FORECAST_SCENARIOS.map((scenarioDefinition) => {
+    const totals = tranches.reduce(
+      (acc, tranche) => {
+        const frequency = tranche.frequency || primaryFrequency;
+        const currentPayment = calculateLoanPartRepayment(tranche, frequency);
+        const rows = forecastRefixRows({
+          principal: tranche.amount ?? 0,
+          currentRate: tranche.rate ?? 0,
+          years: tranche.termYears ?? 30,
+          frequency,
+          currentPayment,
+          fixedEndsInMonths: tranche.fixedMonths ?? 0,
+          marketRates
+        });
+        const termRow =
+          rows.find((row) => row.months === scenarioTermMonths) ??
+          rows.find((row) => row.months === selectedForecastRow?.months) ??
+          rows.find((row) => row.months === 12) ??
+          rows[0];
+        const scenario = termRow?.scenarios.find((item) => item.key === scenarioDefinition.key) ?? termRow?.scenarios[0];
+        const remainingBalance = termRow?.remainingBalance ?? tranche.amount ?? 0;
+
+        return {
+          currentAnnualPayment: acc.currentAnnualPayment + paymentToAnnual(currentPayment, frequency),
+          projectedAnnualPayment: acc.projectedAnnualPayment + paymentToAnnual(scenario?.repayment ?? 0, frequency),
+          weightedRateTotal: acc.weightedRateTotal + (scenario?.forecastMortgageRate ?? 0) * remainingBalance,
+          balanceTotal: acc.balanceTotal + remainingBalance
+        };
+      },
+      {
+        currentAnnualPayment: 0,
+        projectedAnnualPayment: 0,
+        weightedRateTotal: 0,
+        balanceTotal: 0
+      }
+    );
+    const currentPayment = paymentFromAnnual(totals.currentAnnualPayment, primaryFrequency);
+    const projectedPayment = paymentFromAnnual(totals.projectedAnnualPayment, primaryFrequency);
+    const delta = projectedPayment - currentPayment;
+
+    return {
+      key: scenarioDefinition.key,
+      label:
+        scenarioDefinition.key === "optimistic"
+          ? "Optimistic Scenario"
+          : scenarioDefinition.key === "conservative"
+            ? "Conservative Scenario"
+            : "Base Case Scenario",
+      tone: scenarioDefinition.tone,
+      projectedRate: percent(totals.balanceTotal > 0 ? totals.weightedRateTotal / totals.balanceTotal : 0),
+      projectedRepayment: currency(projectedPayment),
+      currentRepayment: currency(currentPayment),
+      delta,
+      deltaLabel: `${delta >= 0 ? "+" : ""}${currency(delta)}/${frequencyShort}`,
+      badgeLabel:
+        delta < 0
+          ? "Monthly savings"
+          : scenarioDefinition.key === "conservative"
+            ? "Potential strain"
+            : "Change vs now"
+    };
+  });
+  const refixMatrix = {
+    termLabel: scenarioTermLabel,
+    frequencyLabel,
+    frequencyShort,
+    timelineRows,
+    scenarioCards
+  };
+  const baseScenarioCard = scenarioCards.find((scenario) => scenario.key === "base") ?? scenarioCards[0];
+  const keyTakeaways = [
+    `${currency(totalDebt)} is split across ${tranches.length} ${
+      tranches.length === 1 ? "loan part" : "loan parts"
+    }, with a weighted average rate of ${percent(weightedRate)}.`,
+    `Your current repayment is about ${currency(monthlyRepayment)} per month, or ${currency(
+      summary.repayment
+    )} per ${frequencyLabel}.`,
+    periodIncome > 0
+      ? `After the standard mortgage repayment, estimated cash left is ${currency(
+          monthlyCashAfterRepayment
+        )} per month. DTI is approximately ${dtiRatio.toFixed(2)}x.`
+      : "Add income to see cash left after the mortgage and an estimated DTI.",
+    marketRateRows.length > 0
+      ? `Compared with the selected market view, the total estimated difference is ${
+          marketTotalMonthlyImpact >= 0 ? "+" : ""
+        }${currency(marketTotalMonthlyImpact)} per month.`
+      : "Market comparison will appear once loan-part and rate data are complete.",
+    baseScenarioCard
+      ? `Base re-fix scenario: if all active parts moved to a ${scenarioTermLabel} fixed rate, the combined repayment is estimated at ${baseScenarioCard.projectedRepayment} per ${frequencyShort}, a change of ${baseScenarioCard.deltaLabel}.`
+      : "Re-fix scenarios will appear once loan-part data are complete."
+  ];
 
   return {
+    keyTakeaways,
     summaryStats,
     overviewRows,
     marketRows,
+    marketTotalMonthlyImpact: `${marketTotalMonthlyImpact >= 0 ? "+" : ""}${currency(marketTotalMonthlyImpact)}`,
     actionRows,
     inputRows,
+    refixMatrix,
     items: [
       { label: "Loan structure", copy: structureSentence },
       { label: "Repayment source", copy: repaymentSourceSentence },

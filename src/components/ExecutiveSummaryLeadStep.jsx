@@ -1,12 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { Clipboard, ClipboardCheck, Download, FileJson, Mail, Printer, Send } from "lucide-react";
-import {
-  buildBrokerReadySummaryPayload,
-  copyTextToClipboard,
-  downloadJson,
-  emptyConsentFields,
-  emptyContactFields
-} from "../summaryPayload.js";
+import { ClipboardCheck, Send } from "lucide-react";
+import { emptyConsentFields, emptyContactFields } from "../summaryPayload.js";
 import { LEAD_CONSENT_TEXT, PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from "../privacy.js";
 
 const BANK_OPTIONS = ["", "ANZ", "ASB", "BNZ", "Kiwibank", "Westpac", "Other"];
@@ -24,34 +18,6 @@ function validateEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
-function buildEmailBody(summaryContent) {
-  const stats = (summaryContent.summaryStats ?? []).map((item) => `${item.label}: ${item.value} (${item.detail})`);
-  const inputs = (summaryContent.inputRows ?? []).map((item) => `${item.label}: ${item.value} - ${item.detail}`);
-  const market = (summaryContent.marketRows ?? []).map(
-    (item) =>
-      `${item.label}: your rate ${item.yourRate}, average rate ${item.marketRate}, average vs your rate ${item.difference}, monthly impact ${item.monthlyImpact}`
-  );
-  const actions = (summaryContent.actionRows ?? []).map((item) => `${item.label}: ${item.value} - ${item.detail}`);
-
-  return [
-    "TrimRate home loan summary",
-    "",
-    "Key results",
-    ...stats,
-    "",
-    "Inputs used",
-    ...inputs,
-    "",
-    "Market comparison",
-    ...(market.length > 0 ? market : ["No market comparison rows available."]),
-    "",
-    "Scenarios",
-    ...actions,
-    "",
-    summaryContent.disclaimer
-  ].join("\n");
-}
-
 function validateLeadForm(values) {
   const errors = {};
   const phoneDigits = values.phone.replace(/\D/g, "");
@@ -66,27 +32,14 @@ function validateLeadForm(values) {
   return errors;
 }
 
-export function ExecutiveSummaryLeadStep({
-  summaryContent,
-  summaryPayloadBase,
-  serializedState,
-  onSubmitLead,
-  onPdfRequested,
-  onSummaryExported
-}) {
+export function ExecutiveSummaryLeadStep({ summaryContent, summaryPayloadBase, onSubmitLead, onSummaryExported }) {
   const [values, setValues] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
-  const [actionStatus, setActionStatus] = useState("");
   const [consentTimestamp, setConsentTimestamp] = useState("");
   const [leadFormStarted, setLeadFormStarted] = useState(false);
 
-  const summaryStats = useMemo(() => summaryContent.summaryStats ?? [], [summaryContent.summaryStats]);
-  const overviewRows = useMemo(() => summaryContent.overviewRows ?? [], [summaryContent.overviewRows]);
-  const marketRows = useMemo(() => summaryContent.marketRows ?? [], [summaryContent.marketRows]);
-  const actionRows = useMemo(() => summaryContent.actionRows ?? [], [summaryContent.actionRows]);
-  const inputRows = useMemo(() => summaryContent.inputRows ?? [], [summaryContent.inputRows]);
-  const emailBody = useMemo(() => buildEmailBody(summaryContent), [summaryContent]);
+  const keyTakeaways = useMemo(() => summaryContent.keyTakeaways ?? [], [summaryContent.keyTakeaways]);
   const contact = useMemo(
     () => ({
       ...emptyContactFields(),
@@ -121,7 +74,6 @@ export function ExecutiveSummaryLeadStep({
     setValues((current) => ({ ...current, [field]: value }));
     setErrors((current) => ({ ...current, [field]: undefined }));
     setSubmitted(false);
-    setActionStatus("");
 
     if (!leadFormStarted) {
       setLeadFormStarted(true);
@@ -137,46 +89,6 @@ export function ExecutiveSummaryLeadStep({
         setConsentTimestamp("");
       }
     }
-  }
-
-  async function handleCopySummary() {
-    await copyTextToClipboard(emailBody);
-    onSummaryExported?.("copy_summary");
-    setActionStatus("Summary copied.");
-  }
-
-  function handleExportJson() {
-    downloadJson("trimrate-summary.json", summaryPayload);
-    onSummaryExported?.("export_json");
-    setActionStatus("Summary JSON exported.");
-  }
-
-  async function handleBrokerPayload() {
-    const brokerPayload = buildBrokerReadySummaryPayload(summaryPayload);
-    await copyTextToClipboard(JSON.stringify(brokerPayload, null, 2));
-    onSummaryExported?.("broker_payload");
-    setActionStatus("Broker-ready summary payload generated and copied.");
-  }
-
-  function handlePdfHook() {
-    onPdfRequested?.(summaryPayload);
-    onSummaryExported?.("download_pdf");
-    setActionStatus("Choose Save as PDF in the print window.");
-    window.print();
-  }
-
-  function handleEmailSummary() {
-    if (!validateEmail(values.email)) {
-      setErrors((current) => ({ ...current, email: "Enter an email address first." }));
-      setActionStatus("Add your email address to send the summary.");
-      return;
-    }
-
-    const subject = encodeURIComponent("Your TrimRate home loan summary");
-    const body = encodeURIComponent(emailBody);
-    window.location.href = `mailto:${encodeURIComponent(values.email.trim())}?subject=${subject}&body=${body}`;
-    onSummaryExported?.("email_summary");
-    setActionStatus("Email draft opened with your summary.");
   }
 
   async function handleSubmit(event) {
@@ -237,183 +149,34 @@ export function ExecutiveSummaryLeadStep({
         </div>
         <div>
           <p className="text-xs font-black uppercase tracking-wide text-[#3A6047]">Home loan summary</p>
-          <h2 className="text-xl font-black text-[#1B2A22] sm:text-2xl">Your results at a glance</h2>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-[#7B756E]">The key numbers from your calculator run.</p>
+          <h2 className="text-xl font-black text-[#1B2A22] sm:text-2xl">Key takeaways</h2>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-[#7B756E]">
+            A plain-English wrap-up of the important results from the calculator.
+          </p>
         </div>
       </div>
 
       <div className="grid gap-5">
-        <div id="home-loan-summary" className="grid gap-5">
+        <div id="home-loan-summary" className="rounded-xl border border-[#E2DDD5] bg-[#FFFEFC] p-4 sm:p-5">
           <div className="print-heading">
             <p>TrimRate.co.nz</p>
             <h1>Home Loan Summary</h1>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {summaryStats.map((stat) => (
-              <div key={stat.label} className="rounded-xl border border-[#E2DDD5] bg-[#FFFEFC] p-4">
-                <p className="text-xs font-black uppercase tracking-wide text-[#7B756E]">{stat.label}</p>
-                <p className="mt-2 text-2xl font-black text-[#1B2A22]">{stat.value}</p>
-                <p className="mt-1 text-xs font-semibold leading-5 text-[#7B756E]">{stat.detail}</p>
-              </div>
+
+          <ul className="grid gap-3 text-sm leading-6 text-[#4F5A52]">
+            {keyTakeaways.map((takeaway) => (
+              <li key={takeaway} className="grid grid-cols-[24px_1fr] gap-3">
+                <span className="mt-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#3A6047] text-xs font-black text-white">
+                  +
+                </span>
+                <span>{takeaway}</span>
+              </li>
             ))}
-          </div>
+          </ul>
 
-          <div className="overflow-hidden rounded-xl border border-[#E2DDD5] bg-[#FFFEFC]">
-            <div className="border-b border-[#E2DDD5] bg-[#F7F5F0] px-4 py-3">
-              <h3 className="text-sm font-black text-[#1B2A22]">Inputs used</h3>
-            </div>
-            <div className="grid divide-y divide-[#E2DDD5] md:grid-cols-2 md:divide-x md:divide-y-0">
-              {inputRows.map((row) => (
-                <div key={row.label} className="p-4">
-                  <p className="text-xs font-black uppercase tracking-wide text-[#7B756E]">{row.label}</p>
-                  <p className="mt-1 font-black text-[#1B2A22]">{row.value}</p>
-                  <p className="mt-1 text-xs font-semibold leading-5 text-[#7B756E]">{row.detail}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-[1fr_1.1fr]">
-            <div className="overflow-hidden rounded-xl border border-[#E2DDD5] bg-[#FFFEFC]">
-              <div className="border-b border-[#E2DDD5] bg-[#F7F5F0] px-4 py-3">
-                <h3 className="text-sm font-black text-[#1B2A22]">Loan overview</h3>
-              </div>
-              <table className="w-full text-left text-sm">
-                <tbody className="divide-y divide-[#E2DDD5]">
-                  {overviewRows.map((row) => (
-                    <tr key={row.label}>
-                      <th className="w-[36%] px-4 py-3 align-top text-xs font-black uppercase tracking-wide text-[#7B756E]">
-                        {row.label}
-                      </th>
-                      <td className="px-4 py-3">
-                        <p className="font-black text-[#1B2A22]">{row.value}</p>
-                        <p className="mt-1 text-xs font-semibold leading-5 text-[#7B756E]">{row.detail}</p>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="overflow-hidden rounded-xl border border-[#E2DDD5] bg-[#FFFEFC]">
-              <div className="border-b border-[#E2DDD5] bg-[#F7F5F0] px-4 py-3">
-                <h3 className="text-sm font-black text-[#1B2A22]">Market comparison</h3>
-              </div>
-              <div className="max-w-full overflow-x-auto">
-                <table className="w-full min-w-[520px] text-left text-sm">
-                  <thead className="text-xs uppercase tracking-wide text-[#7B756E]">
-                    <tr>
-                      <th className="px-4 py-3">Part</th>
-                      <th className="px-4 py-3">Your rate</th>
-                      <th className="px-4 py-3">Average rate</th>
-                      <th className="px-4 py-3">Average vs your rate</th>
-                      <th className="px-4 py-3">Monthly impact</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#E2DDD5]">
-                    {marketRows.map((row) => (
-                      <tr key={row.label}>
-                        <td className="px-4 py-3">
-                          <p className="font-black text-[#1B2A22]">{row.label}</p>
-                          <p className="text-xs font-semibold text-[#7B756E]">{row.setup}</p>
-                        </td>
-                        <td className="px-4 py-3 font-bold">{row.yourRate}</td>
-                        <td className="px-4 py-3">
-                          <p className="font-bold">{row.marketRate}</p>
-                          <p className="text-xs font-semibold text-[#7B756E]">{row.comparisonSource}</p>
-                        </td>
-                        <td className="px-4 py-3 font-black text-[#3A6047]">{row.difference}</td>
-                        <td className="px-4 py-3 font-black text-[#1B2A22]">{row.monthlyImpact}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-3">
-            {actionRows.map((row) => (
-              <div key={row.label} className="rounded-xl border border-[#D6E2DA] bg-[#F4FAF6] p-4">
-                <p className="text-xs font-black uppercase tracking-wide text-[#3A6047]">{row.label}</p>
-                <p className="mt-2 text-lg font-black text-[#1B2A22]">{row.value}</p>
-                <p className="mt-1 text-xs font-semibold leading-5 text-[#5F665F]">{row.detail}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="rounded-xl border border-[#D6E2DA] bg-[#F4FAF6] p-4">
-            <p className="text-sm font-semibold leading-6 text-[#3A6047]">{summaryContent.disclaimer}</p>
-          </div>
-        </div>
-
-        <div className="no-print grid gap-4 rounded-xl border border-[#E2DDD5] bg-[#FFFEFC] p-4 lg:grid-cols-[1fr_auto] lg:items-end">
-          <label className="grid min-w-0 gap-2 text-sm font-semibold text-[#1B2A22]">
-            Email summary to
-            <input
-              value={values.email}
-              onChange={(event) => updateField("email", event.target.value)}
-              className="h-12 w-full rounded-lg border border-[#D6E2DA] bg-white px-3 text-base font-bold outline-none transition focus:border-[#3A6047] focus:ring-2 focus:ring-[#3A6047]/15"
-              type="email"
-              autoComplete="email"
-              placeholder="you@example.co.nz"
-            />
-            {errors.email && <span className="text-xs font-bold text-[#C86A53]">{errors.email}</span>}
-          </label>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <button
-              type="button"
-              onClick={handlePdfHook}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-[#3A6047] px-4 text-sm font-black text-white shadow-sm transition hover:bg-[#2F503B]"
-            >
-              <Printer size={16} aria-hidden="true" />
-              Download PDF
-            </button>
-            <button
-              type="button"
-              onClick={handleEmailSummary}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-[#D6E2DA] bg-white px-4 text-sm font-black text-[#1B2A22] hover:border-[#3A6047]/70 hover:text-[#3A6047]"
-            >
-              <Mail size={16} aria-hidden="true" />
-              Email summary
-            </button>
-            <button
-              type="button"
-              onClick={handleCopySummary}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-[#D6E2DA] bg-white px-4 text-sm font-black text-[#1B2A22] hover:border-[#3A6047]/70 hover:text-[#3A6047]"
-            >
-              <Clipboard size={16} aria-hidden="true" />
-              Copy summary
-            </button>
-          </div>
-          {actionStatus && (
-            <p className="rounded-lg bg-[#F4FAF6] px-3 py-2 text-sm font-bold text-[#3A6047] lg:col-span-2">
-              {actionStatus}
-            </p>
-          )}
-          <details className="lg:col-span-2">
-            <summary className="cursor-pointer text-xs font-black uppercase tracking-wide text-[#7B756E]">
-              Advanced export options
-            </summary>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={handleExportJson}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#D6E2DA] bg-white px-3 text-xs font-black text-[#1B2A22] hover:border-[#3A6047]/70 hover:text-[#3A6047]"
-              >
-                <Download size={15} aria-hidden="true" />
-                Export calculator data
-              </button>
-              <button
-                type="button"
-                onClick={handleBrokerPayload}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#D6E2DA] bg-white px-3 text-xs font-black text-[#1B2A22] hover:border-[#3A6047]/70 hover:text-[#3A6047]"
-              >
-                <FileJson size={15} aria-hidden="true" />
-                Copy broker payload
-              </button>
-            </div>
-          </details>
+          <p className="mt-4 rounded-lg bg-[#F4FAF6] p-3 text-sm font-semibold leading-6 text-[#3A6047]">
+            {summaryContent.disclaimer}
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="no-print rounded-xl border border-[#D6E2DA] bg-[#F4FAF6] p-4 sm:p-5">

@@ -513,13 +513,15 @@ function App() {
         selectedForecastTranche,
         selectedForecastRow,
         selectedForecastScenario,
+        selectedForecastTermMonths,
         extraPayment: toPositive(extraPayment),
         summary,
         periodIncome: salaryAmount,
         repaymentToIncome,
         cashAfterRepayment: netCash.remainingCash,
         cashAfterOutgoings: netCash.cashAfterOutgoings,
-        marketRateRows
+        marketRateRows,
+        marketRates: marketRates.rates
       }),
     [
       forecastTranches,
@@ -529,13 +531,15 @@ function App() {
       selectedForecastTranche,
       selectedForecastRow,
       selectedForecastScenario,
+      selectedForecastTermMonths,
       extraPayment,
       summary,
       salaryAmount,
       repaymentToIncome,
       netCash.remainingCash,
       netCash.cashAfterOutgoings,
-      marketRateRows
+      marketRateRows,
+      marketRates.rates
     ]
   );
   const serializedMortgageState = useMemo(
