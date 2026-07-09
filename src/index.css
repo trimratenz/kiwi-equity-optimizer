@@ -21,3 +21,61 @@ select,
 button {
   font: inherit;
 }
+
+.print-heading {
+  display: none;
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  #home-loan-summary,
+  #home-loan-summary * {
+    visibility: visible;
+  }
+
+  #home-loan-summary {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    padding: 0;
+  }
+
+  #home-loan-summary .overflow-x-auto {
+    overflow: visible;
+  }
+
+  #home-loan-summary table {
+    min-width: 0 !important;
+  }
+
+  #home-loan-summary .print-heading {
+    display: block;
+    margin-bottom: 18px;
+  }
+
+  #home-loan-summary .print-heading p {
+    margin: 0 0 4px;
+    color: #3a6047;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  #home-loan-summary .print-heading h1 {
+    margin: 0;
+    color: #1b2a22;
+    font-size: 24px;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}

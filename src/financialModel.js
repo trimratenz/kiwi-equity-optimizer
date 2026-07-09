@@ -901,6 +901,13 @@ export function buildPlainEnglishSummary({
           })
           .join(" ")
       : "Market comparison is unavailable until loan-part and rate data are complete.";
+  const strongestMarketRow = marketRateRows.reduce((best, row) => {
+    if (!best) return row;
+    return Math.abs(row.difference) > Math.abs(best.difference) ? row : best;
+  }, null);
+  const strongestMarketMonthlyImpact = strongestMarketRow
+    ? paymentToAnnual(strongestMarketRow.repaymentDifference, strongestMarketRow.frequency) / 12
+    : 0;
 
   const structureSentence = `${currency(totalDebt)} is shown across ${tranches.length} ${
     tranches.length === 1 ? "loan part" : "loan parts"
@@ -944,8 +951,139 @@ export function buildPlainEnglishSummary({
   )} and modelled time difference is ${yearsAndMonths(summary.timeSavedPeriods, primaryFrequency)}.`;
   const disclaimer =
     "This is a calculator summary only. It is not financial advice, credit advice, or a lending approval. Rates, forecasts, eligibility, fees, tax treatment, and repayments can change; confirm details with a licensed mortgage adviser or lender.";
+  const repaymentSourceShort = hasRepaymentOverride ? "Entered repayment" : "Calculated minimum";
+  const marketRows = marketRateRows.map((row) => {
+    const monthlyImpact = paymentToAnnual(row.repaymentDifference, row.frequency) / 12;
+    return {
+      label: `Part ${row.index}`,
+      setup: `${row.marketTerm}`,
+      yourRate: percent(row.currentRate),
+      marketRate: percent(row.marketRate),
+      difference: `${row.difference >= 0 ? "+" : ""}${percent(row.difference)}`,
+      monthlyImpact: `${monthlyImpact >= 0 ? "+" : ""}${currency(monthlyImpact)}`,
+      comparisonSource: row.comparisonSource || "Five-bank average"
+    };
+  });
+  const summaryStats = [
+    {
+      label: "Total loan",
+      value: currency(totalDebt),
+      detail: `${tranches.length} ${tranches.length === 1 ? "part" : "parts"}`
+    },
+    {
+      label: "Avg rate",
+      value: percent(weightedRate),
+      detail: "Weighted across all parts"
+    },
+    {
+      label: "Monthly repayment",
+      value: currency(monthlyRepayment),
+      detail: repaymentSourceShort
+    },
+    {
+      label: "Cash after mortgage",
+      value: currency(monthlyCashAfterRepayment),
+      detail: periodIncome > 0 ? `${percent(repaymentToIncome, 1)} of income to repayment` : "Add income for cash-flow"
+    }
+  ];
+  const overviewRows = [
+    {
+      label: "Loan setup",
+      value: `${tranches.length} ${tranches.length === 1 ? "loan part" : "loan parts"}`,
+      detail: `${currency(totalDebt)} at ${percent(weightedRate)} avg`
+    },
+    {
+      label: "Repayment used",
+      value: `${currency(summary.repayment)} / ${frequencyShort}`,
+      detail: repaymentSourceShort
+    },
+    {
+      label: "Cash position",
+      value: currency(cashAfterOutgoingsMonthly),
+      detail: "Monthly after mortgage, top-up, and living costs"
+    },
+    {
+      label: "DTI estimate",
+      value: `${dtiRatio.toFixed(2)}x`,
+      detail: dti.detail
+    }
+  ];
+  const actionRows = [
+    {
+      label: "Market check",
+      value: strongestMarketRow
+        ? `Part ${strongestMarketRow.index}: ${strongestMarketRow.difference >= 0 ? "+" : ""}${percent(
+            strongestMarketRow.difference
+          )}`
+        : "Unavailable",
+      detail: strongestMarketRow
+        ? `${strongestMarketMonthlyImpact >= 0 ? "+" : ""}${currency(strongestMarketMonthlyImpact)} monthly impact vs ${
+            strongestMarketRow.comparisonSource || "average"
+          }`
+        : "Complete loan details to compare rates"
+    },
+    {
+      label: "Re-fix scenario",
+      value: `Part ${selectedForecastTranche?.index ?? 1}: ${selectedForecastRow?.label ?? "1 year"}`,
+      detail: `${currency(selectedRepayment)} monthly at ${percent(
+        selectedForecastScenario?.forecastMortgageRate ?? selectedForecastRow?.forecastMortgageRate ?? 0
+      )}`
+    },
+    {
+      label: "Extra repayment",
+      value: currency(topUpMonthly),
+      detail: `${currency(summary.interestSaved)} modelled interest difference`
+    }
+  ];
+  const loanPartSummary = tranches
+    .map((tranche, index) => {
+      const label = tranche.index ?? index + 1;
+      return `Part ${label}: ${currency(tranche.amount ?? tranche.principal ?? 0)} ${tranche.type || "Loan"} at ${percent(
+        tranche.rate ?? 0
+      )}`;
+    })
+    .join("; ");
+  const inputRows = [
+    {
+      label: "Loan parts",
+      value: `${tranches.length} ${tranches.length === 1 ? "part" : "parts"}`,
+      detail: loanPartSummary
+    },
+    {
+      label: "Repayment view",
+      value: primaryFrequency,
+      detail: `${currency(summary.repayment)} per ${frequencyLabel}`
+    },
+    {
+      label: "Income entered",
+      value: periodIncome > 0 ? `${currency(periodIncome)} / ${frequencyShort}` : "Not entered",
+      detail: periodIncome > 0 ? `${currency(monthlyCashAfterRepayment)} monthly cash after mortgage` : "Add income for cash-flow and DTI"
+    },
+    {
+      label: "Market view",
+      value: strongestMarketRow?.comparisonSource || "Five-bank average",
+      detail: strongestMarketRow
+        ? `Closest term checked: ${strongestMarketRow.marketTerm}`
+        : "Market comparison is unavailable"
+    },
+    {
+      label: "Re-fix scenario",
+      value: `Part ${selectedForecastTranche?.index ?? 1}, ${selectedForecastRow?.label ?? "1 year"}`,
+      detail: `Refix point: ${selectedForecastRow?.refixPointLabel ?? "now"}`
+    },
+    {
+      label: "Top-up and costs",
+      value: `${currency(topUpMonthly)} top-up / mo`,
+      detail: `${currency(livingCostsMonthly)} living costs / mo`
+    }
+  ];
 
   return {
+    summaryStats,
+    overviewRows,
+    marketRows,
+    actionRows,
+    inputRows,
     items: [
       { label: "Loan structure", copy: structureSentence },
       { label: "Repayment source", copy: repaymentSourceSentence },

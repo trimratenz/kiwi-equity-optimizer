@@ -18,6 +18,7 @@ export function MarketRateComparisonStep({
   }[marketRates.status];
   const selectedBankName = bankOptions.find((bank) => bank.id === selectedBankId)?.name;
   const matchedRateLabel = selectedBankName ? `${selectedBankName} rate` : "Five-bank average";
+  const differenceLabel = selectedBankName ? `${selectedBankName} vs your rate` : "Average vs your rate";
 
   return (
     <StepShell
@@ -67,7 +68,7 @@ export function MarketRateComparisonStep({
               <th className="p-3">{matchedRateLabel}</th>
               <th className="p-3">Lowest bank</th>
               <th className="p-3">Your rate</th>
-              <th className="p-3">Difference vs your rate</th>
+              <th className="p-3">{differenceLabel}</th>
               <th className="p-3">Estimated monthly impact</th>
             </tr>
           </thead>
