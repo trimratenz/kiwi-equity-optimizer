@@ -19,7 +19,6 @@ state = reduce(state, { type: "UPDATE_TRANCHE", id: firstId, field: "termYears",
 state = reduce(state, { type: "UPDATE_TRANCHE", id: firstId, field: "repaymentAmount", value: "989.55", decimal: true });
 state = reduce(state, { type: "UPDATE_TRANCHE", id: firstId, field: "type", value: "Variable" });
 state = reduce(state, { type: "UPDATE_TRANCHE", id: firstId, field: "frequency", value: "Fortnightly" });
-state = reduce(state, { type: "UPDATE_TRANCHE", id: firstId, field: "offsetBalance", value: "25000", decimal: true });
 
 const beforeAdd = state;
 state = reduce(state, { type: "ADD_TRANCHE" });
@@ -34,7 +33,6 @@ assert.equal(state.tranches[0].termYears, "20", "Existing term should be preserv
 assert.equal(state.tranches[0].repaymentAmount, "989.55", "Existing current repayment should be preserved");
 assert.equal(state.tranches[0].type, "Variable", "Existing loan type should be preserved");
 assert.equal(state.tranches[0].frequency, "Fortnightly", "Existing repayment frequency should be preserved");
-assert.equal(state.tranches[0].offsetBalance, "25000", "Existing offset/redraw balance should be preserved");
 assert.ok(state.tranches[1].id, "New tranche should have a generated id");
 assert.notEqual(state.tranches[1].id, firstId, "New tranche id should be unique");
 

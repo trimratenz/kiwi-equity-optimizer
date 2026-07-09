@@ -21,7 +21,7 @@ export function MarketRateComparisonStep({
 
   return (
     <StepShell
-      step="Step 4"
+      step="Step 3"
       icon={Sparkles}
       title="How does each loan part compare with the market?"
       detail={`Each loan part is matched to the closest term from ${marketRates.source}. Last refreshed ${marketRates.lastRefreshed || marketRates.captured}. Leave the bank selector blank for the average, or choose one bank for a direct comparison.`}

@@ -22,10 +22,10 @@ export function createTranche(overrides = {}) {
     amount: "",
     rate: "",
     termYears: "30",
+    paysMoreThanMinimum: "no",
     repaymentAmount: "",
     fixedTermMonths: "12",
     fixedMonths: "12",
-    offsetBalance: "0",
     frequency: "Monthly",
     type: "Fixed",
     ...overrides

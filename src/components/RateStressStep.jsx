@@ -27,10 +27,11 @@ export function RateStressStep({
     forecastRows.find((row) => row.months === selectedForecastTermMonths) ??
     forecastRows.find((row) => row.months === 12) ??
     forecastRows[0];
+  const isVariableLoanPart = selectedForecastTranche?.type === "Variable";
 
   return (
     <StepShell
-      step="Step 5"
+      step="Step 4"
       icon={AlertTriangle}
       title="What could I pay when I re-fix?"
       detail="Pick the loan part and the new fixed term. TrimRate uses the RBNZ OCR forecast for the date your fixed term ends, then shows three repayment outlooks together."
@@ -67,18 +68,18 @@ export function RateStressStep({
               sub={`Original part: ${currency(selectedForecastTranche.originalBalance)}`}
             />
             <Stat
-              label="Fixed ends in"
-              value={monthsLabel(selectedForecastTranche.fixedMonths)}
+              label={isVariableLoanPart ? "Can fix from" : "Fixed ends in"}
+              value={isVariableLoanPart ? "today" : monthsLabel(selectedForecastTranche.fixedMonths)}
               sub={
                 selectedForecastTranche.type === "Fixed"
                   ? `Current fixed term: ${monthsLabel(selectedForecastTranche.fixedTermMonths)}`
-                  : "Variable loan part"
+                  : "Floating or variable loan part"
               }
             />
             <Stat
-              label="Balance at re-fix"
+              label={isVariableLoanPart ? "Balance if fixed today" : "Balance at re-fix"}
               value={currency(selectedTerm?.remainingBalance ?? selectedForecastTranche.amount)}
-              sub={`Projected from the user's current balance`}
+              sub={isVariableLoanPart ? "Uses the current balance" : "Projected from the current balance"}
             />
             <Stat
               label={`Current ${FREQUENCY_CONFIG[selectedForecastFrequency].label} repayment`}
@@ -97,7 +98,7 @@ export function RateStressStep({
                   Showing scenario for {scenarioLabel ?? "Loan details"}
                 </p>
                 <h3 className="mt-2 text-2xl font-black text-[#1B2A22]">
-                  {selectedTerm.label} fixed in {selectedTerm.refixPointLabel}
+                  {selectedTerm.label} fixed {isVariableLoanPart ? "from today" : `in ${selectedTerm.refixPointLabel}`}
                 </h3>
                 <p className="mt-1 text-sm font-medium leading-6 text-[#7B756E]">
                   RBNZ OCR forecast at that point is {percent(selectedTerm.forecastOcr)}. Current Five-bank average for a{" "}

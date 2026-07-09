@@ -185,7 +185,7 @@ export function ExecutiveSummaryLeadStep({
           <ClipboardCheck size={20} aria-hidden="true" />
         </div>
         <div>
-          <p className="text-xs font-black uppercase tracking-wide text-[#3A6047]">After Step 6</p>
+          <p className="text-xs font-black uppercase tracking-wide text-[#3A6047]">After Step 5</p>
           <h2 className="text-xl font-black text-[#1B2A22] sm:text-2xl">Your mortgage snapshot</h2>
           <p className="mt-1 max-w-3xl text-sm leading-6 text-[#7B756E]">
             A plain-English summary of the inputs and calculator outputs entered above.

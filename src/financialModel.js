@@ -6,11 +6,38 @@ import {
   buildBankRateSnapshotView,
   lookupOcrForecastByDate
 } from "./snapshotLayer.js";
+import {
+  FREQUENCY_CONFIG,
+  amortizeLoanPart,
+  buildLoanPartRepaymentDetails,
+  calculateMinimumRepayment,
+  calculateMinimumRepaymentExact,
+  calculatePayment,
+  calculatePayoffTime,
+  calculateRemainingBalance,
+  calculateScenarioComparison,
+  calculateTotalInterest,
+  paymentFromAnnual,
+  paymentToAnnual,
+  periodsForMonths,
+  periodsPerYear,
+  safeFrequency,
+  safeMoney
+} from "./lib/mortgageCalculations.js";
 
-export const FREQUENCY_CONFIG = {
-  Weekly: { periodsPerYear: 52, label: "week", short: "wk" },
-  Fortnightly: { periodsPerYear: 26, label: "fortnight", short: "fn" },
-  Monthly: { periodsPerYear: 12, label: "month", short: "mo" }
+export {
+  FREQUENCY_CONFIG,
+  amortizeLoanPart,
+  buildLoanPartRepaymentDetails,
+  calculateMinimumRepayment,
+  calculateMinimumRepaymentExact,
+  calculatePayment,
+  calculatePayoffTime,
+  calculateRemainingBalance,
+  calculateScenarioComparison,
+  calculateTotalInterest,
+  paymentFromAnnual,
+  paymentToAnnual
 };
 
 export const CALCULATION_AS_OF_DATE = "2026-07-08";
@@ -170,24 +197,6 @@ export function yearsAndMonths(periods, frequency = "Monthly") {
   return `${years} yr ${remainingMonths} mo`;
 }
 
-function safeMoney(value) {
-  return Math.max(Number(value) || 0, 0);
-}
-
-function optionalMoney(value) {
-  if (value === undefined || value === null || String(value).trim() === "") return null;
-  const numeric = Number(String(value).replace(/,/g, ""));
-  return Number.isFinite(numeric) ? Math.max(numeric, 0) : null;
-}
-
-function safeFrequency(frequency = "Monthly") {
-  return FREQUENCY_CONFIG[frequency] ? frequency : "Monthly";
-}
-
-function periodsPerYear(frequency = "Monthly") {
-  return FREQUENCY_CONFIG[safeFrequency(frequency)].periodsPerYear;
-}
-
 function normaliseLoanPart(part, fallbackFrequency = "Monthly") {
   const frequency = safeFrequency(part?.frequency || fallbackFrequency);
   const principal = safeMoney(part?.amount ?? part?.principal ?? part?.balance);
@@ -219,58 +228,6 @@ function normaliseLoanPart(part, fallbackFrequency = "Monthly") {
   };
 }
 
-export function calculateMinimumRepaymentExact({ principal, annualRate, years, frequency = "Monthly" }) {
-  const safePrincipal = safeMoney(principal);
-  const safeYears = Math.max(Number(years) || 1, 1);
-  const periodCount = periodsPerYear(frequency);
-  const totalPeriods = safeYears * periodCount;
-  const periodicRate = (Number(annualRate) || 0) / 100 / periodCount;
-
-  if (periodicRate === 0) return safePrincipal / totalPeriods;
-
-  return (
-    (safePrincipal * periodicRate * Math.pow(1 + periodicRate, totalPeriods)) /
-    (Math.pow(1 + periodicRate, totalPeriods) - 1)
-  );
-}
-
-export function calculatePayment(principal, annualRate, years, frequency = "Monthly") {
-  return calculateMinimumRepaymentExact({ principal, annualRate, years, frequency });
-}
-
-export function buildLoanPartRepaymentDetails({
-  principal,
-  annualRate,
-  years,
-  frequency = "Monthly",
-  userCurrentRepayment
-}) {
-  const calculatedMinimumRepaymentExact = calculateMinimumRepaymentExact({ principal, annualRate, years, frequency });
-  const calculatedMinimumRepaymentRounded = Math.round(calculatedMinimumRepaymentExact);
-  const userCurrentRepaymentExact = optionalMoney(userCurrentRepayment);
-  const hasUserRepayment = userCurrentRepaymentExact !== null;
-  const hasValidUserRepayment = hasUserRepayment && userCurrentRepaymentExact >= calculatedMinimumRepaymentExact;
-  const effectiveCurrentRepaymentExact = hasValidUserRepayment
-    ? userCurrentRepaymentExact
-    : calculatedMinimumRepaymentExact;
-
-  return {
-    calculatedMinimumRepaymentExact,
-    calculatedMinimumRepaymentRounded,
-    userCurrentRepaymentExact,
-    effectiveCurrentRepaymentExact,
-    repaymentSource: hasValidUserRepayment ? "user_override" : "calculated",
-    repaymentValidationError:
-      hasUserRepayment && !hasValidUserRepayment
-        ? {
-            code: "current-repayment-below-minimum",
-            minimumRepaymentExact: calculatedMinimumRepaymentExact,
-            minimumRepaymentRounded: calculatedMinimumRepaymentRounded
-          }
-        : null
-  };
-}
-
 export function calculateLoanPartRepayment(part, fallbackFrequency = "Monthly") {
   const normalised = normaliseLoanPart(part, fallbackFrequency);
   return normalised.effectiveCurrentRepaymentExact;
@@ -293,75 +250,6 @@ export function totalRepaymentAcrossLoanParts(tranches, displayFrequency = "Mont
   }, 0);
 
   return paymentFromAnnual(annualPayment, targetFrequency);
-}
-
-function periodsForMonths(months, frequency = "Monthly") {
-  return Math.ceil((Math.max(Number(months) || 0, 0) / 12) * periodsPerYear(frequency));
-}
-
-export function amortizeLoanPart({
-  principal,
-  annualRate,
-  years,
-  frequency = "Monthly",
-  repaymentAmount = 0,
-  extraPayment = 0,
-  interestOnlyYears = 0,
-  maxPeriods
-}) {
-  const safePrincipal = safeMoney(principal);
-  const safeYears = Math.max(Number(years) || 1, 1);
-  const safeFrequencyName = safeFrequency(frequency);
-  const periodCount = periodsPerYear(safeFrequencyName);
-  const periodicRate = (Number(annualRate) || 0) / 100 / periodCount;
-  const repaymentOverride = safeMoney(repaymentAmount);
-  const minimumPayment = calculatePayment(safePrincipal, annualRate, safeYears, safeFrequencyName);
-  const usesRepaymentOverride = repaymentOverride >= minimumPayment;
-  const basePayment = usesRepaymentOverride ? repaymentOverride : minimumPayment;
-  const extraPerPeriod = safeMoney(extraPayment);
-  const interestOnlyPeriods = Math.round(Math.max(Number(interestOnlyYears) || 0, 0) * periodCount);
-  const scheduledPeriods = usesRepaymentOverride ? Math.ceil(100 * periodCount) : Math.ceil(safeYears * periodCount);
-  const periodLimit = Number.isFinite(maxPeriods) ? Math.max(Math.round(maxPeriods), 0) : scheduledPeriods;
-  const rows = [];
-  let balance = safePrincipal;
-  let totalInterest = 0;
-  let totalPrincipal = 0;
-  let yearInterest = 0;
-  let period = 0;
-
-  for (; period < periodLimit && balance > 1e-8; period += 1) {
-    const interest = balance * periodicRate;
-    const isInterestOnly = period < interestOnlyPeriods;
-    const scheduledPayment = isInterestOnly ? interest : basePayment;
-    const principalPaid = isInterestOnly
-      ? 0
-      : Math.max(0, Math.min(balance, scheduledPayment + extraPerPeriod - interest));
-
-    balance = Math.max(0, balance - principalPaid);
-    totalPrincipal += principalPaid;
-    totalInterest += interest;
-    yearInterest += interest;
-
-    if ((period + 1) % periodCount === 0 || balance <= 1e-8 || period + 1 === periodLimit) {
-      rows.push({
-        year: Math.ceil((period + 1) / periodCount),
-        debt: balance,
-        annualInterest: yearInterest,
-        totalInterest
-      });
-      yearInterest = 0;
-    }
-  }
-
-  return {
-    rows,
-    repayment: basePayment,
-    totalInterest,
-    totalPrincipal,
-    totalPaid: totalPrincipal + totalInterest,
-    periodsToRepay: period,
-    finalDebt: balance
-  };
 }
 
 export function balanceAfterMonths({ principal, annualRate, years, frequency = "Monthly", repaymentAmount = 0, months = 0 }) {
@@ -466,14 +354,6 @@ export function lookupMatrixPayment(matrix, rate) {
   return matrix[rounded] ?? matrix[keys[0]];
 }
 
-export function paymentToAnnual(payment, frequency = "Monthly") {
-  return payment * periodsPerYear(frequency);
-}
-
-export function paymentFromAnnual(annualPayment, frequency = "Monthly") {
-  return annualPayment / periodsPerYear(frequency);
-}
-
 export function annualIncomeFromPeriod(periodIncome, frequency = "Monthly") {
   return safeMoney(periodIncome) * periodsPerYear(frequency);
 }
@@ -506,7 +386,7 @@ export function dtiAssessment(ratio) {
   if (!ratio) {
     return {
       label: "Add income",
-      detail: "Enter income to compare your debt-to-income ratio.",
+      detail: "Enter income to estimate debt compared with annual income.",
       tone: "neutral",
       position: 0
     };
@@ -515,7 +395,7 @@ export function dtiAssessment(ratio) {
   if (ratio < 5) {
     return {
       label: "Comfortable",
-      detail: "Below the 5.00x watch zone used by many lenders.",
+      detail: "Debt is below 5x annual income.",
       tone: "good",
       position: Math.min((ratio / 7) * 100, 100)
     };
@@ -524,7 +404,7 @@ export function dtiAssessment(ratio) {
   if (ratio < 6) {
     return {
       label: "Watch",
-      detail: "Approaching the 6.00x owner-occupier DTI threshold.",
+      detail: "Getting close to the 6x owner-occupier threshold.",
       tone: "watch",
       position: Math.min((ratio / 7) * 100, 100)
     };
@@ -533,7 +413,7 @@ export function dtiAssessment(ratio) {
   if (ratio < 7) {
     return {
       label: "High",
-      detail: "Above the common 6.00x owner-occupier DTI threshold.",
+      detail: "Above the 6x owner-occupier threshold.",
       tone: "tight",
       position: Math.min((ratio / 7) * 100, 100)
     };
@@ -541,7 +421,7 @@ export function dtiAssessment(ratio) {
 
   return {
     label: "Very high",
-    detail: "Above the common 7.00x investor DTI threshold.",
+    detail: "Above the 7x investor threshold.",
     tone: "stretched",
     position: 100
   };

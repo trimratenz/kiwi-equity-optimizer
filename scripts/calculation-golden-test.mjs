@@ -13,6 +13,13 @@ import {
   totalRepaymentAcrossLoanParts,
   weightedAverageRate
 } from "../src/financialModel.js";
+import {
+  calculateMinimumRepayment,
+  calculatePayoffTime,
+  calculateRemainingBalance,
+  calculateScenarioComparison,
+  calculateTotalInterest
+} from "../src/lib/mortgageCalculations.js";
 
 const tolerance = 1e-6;
 
@@ -21,6 +28,10 @@ function assertClose(actual, expected, label) {
     Math.abs(actual - expected) <= tolerance,
     `${label}: expected ${expected}, received ${actual}`
   );
+}
+
+function assertRoundedCents(actual, expected, label) {
+  assert.equal(Number(actual.toFixed(2)), expected, label);
 }
 
 const tranches = [
@@ -32,8 +43,7 @@ const tranches = [
     type: "Fixed",
     frequency: "Monthly",
     fixedTermMonths: 12,
-    fixedMonths: 6,
-    offsetBalance: 0
+    fixedMonths: 6
   },
   {
     id: "part-2",
@@ -43,8 +53,7 @@ const tranches = [
     type: "Fixed",
     frequency: "Monthly",
     fixedTermMonths: 24,
-    fixedMonths: 18,
-    offsetBalance: 0
+    fixedMonths: 18
   }
 ];
 
@@ -214,15 +223,55 @@ assertClose(
   2684.108115060699,
   "edge monthly repayment"
 );
+assertRoundedCents(
+  calculateMinimumRepayment({
+    loanBalance: 500000,
+    annualInterestRate: 5,
+    remainingYears: 30,
+    frequency: "Monthly"
+  }),
+  2684.11,
+  "required case 2 monthly repayment"
+);
 assertClose(
   calculateMinimumRepaymentExact({ principal: 500000, annualRate: 5, years: 30, frequency: "Fortnightly" }),
   1238.2212258492025,
   "edge fortnightly repayment"
 );
+assertRoundedCents(
+  calculateMinimumRepayment({
+    loanBalance: 500000,
+    annualInterestRate: 5,
+    remainingYears: 30,
+    frequency: "Fortnightly"
+  }),
+  1238.22,
+  "required case 1 fortnightly repayment"
+);
 assertClose(
   calculateMinimumRepaymentExact({ principal: 500000, annualRate: 5, years: 30, frequency: "Weekly" }),
   618.9824593144447,
   "edge weekly repayment"
+);
+assertRoundedCents(
+  calculateMinimumRepayment({
+    loanBalance: 500000,
+    annualInterestRate: 4.55,
+    remainingYears: 25,
+    frequency: "Fortnightly"
+  }),
+  1288.54,
+  "required case 3 fortnightly repayment"
+);
+assertRoundedCents(
+  calculateMinimumRepayment({
+    loanBalance: 100000,
+    annualInterestRate: 0,
+    remainingYears: 10,
+    frequency: "Fortnightly"
+  }),
+  384.62,
+  "required case 4 zero-interest fortnightly repayment"
 );
 assertClose(
   calculateMinimumRepaymentExact({ principal: 120000, annualRate: 0, years: 10, frequency: "Monthly" }),
@@ -256,5 +305,54 @@ assertClose(
   1609.8356189526462,
   "edge mixed frequencies annualise to monthly equivalent"
 );
+
+assertClose(
+  calculateRemainingBalance({
+    loanBalance: 500000,
+    annualInterestRate: 5,
+    remainingYears: 30,
+    frequency: "Monthly",
+    months: 12
+  }),
+  492623.17327216256,
+  "pure remaining balance after 12 months"
+);
+assertClose(
+  calculateTotalInterest({
+    loanBalance: 500000,
+    annualInterestRate: 5,
+    remainingYears: 30,
+    frequency: "Monthly"
+  }),
+  466278.9214218487,
+  "pure total interest over full term"
+);
+assert.equal(
+  calculatePayoffTime({
+    loanBalance: 500000,
+    annualInterestRate: 5,
+    remainingYears: 30,
+    frequency: "Monthly"
+  }).periods,
+  360,
+  "pure payoff time in monthly periods"
+);
+
+const scenarioComparison = calculateScenarioComparison({
+  baseScenario: {
+    loanBalance: 500000,
+    annualInterestRate: 5,
+    remainingYears: 30,
+    frequency: "Monthly"
+  },
+  comparisonScenario: {
+    loanBalance: 500000,
+    annualInterestRate: 4.55,
+    remainingYears: 25,
+    frequency: "Fortnightly"
+  }
+});
+assert.ok(scenarioComparison.repaymentDifference < 0, "pure scenario comparison calculates repayment difference");
+assert.ok(scenarioComparison.totalInterestDifference < 0, "pure scenario comparison calculates interest difference");
 
 console.log("Calculation golden test passed");

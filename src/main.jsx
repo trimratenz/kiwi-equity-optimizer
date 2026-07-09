@@ -5,14 +5,14 @@ import "./index.css";
 import { submitLeadPayload, trackCalculatorRun, trackEvent } from "./analyticsClient";
 import { LoanBalanceStep } from "./components/LoanBalanceStep";
 import { ExecutiveSummaryLeadStep } from "./components/ExecutiveSummaryLeadStep";
-import { LoanStructureStep } from "./components/LoanStructureStep";
 import { MarketRateComparisonStep } from "./components/MarketRateComparisonStep";
 import { OptimizationStep } from "./components/OptimizationStep";
 import { RateStressStep } from "./components/RateStressStep";
-import { RepaymentSummaryStep } from "./components/RepaymentSummaryStep";
+import { RepaymentBreakdownTable, RepaymentSummaryStep } from "./components/RepaymentSummaryStep";
 import { Stat } from "./components/ui";
 import {
   FREQUENCY_CONFIG,
+  CALCULATION_AS_OF_DATE,
   MARKET_RATE_SNAPSHOT,
   buildPlainEnglishSummary,
   buildLoanPartRepaymentDetails,
@@ -36,12 +36,23 @@ import { fetchMortgageRates } from "./ratesApi";
 import {
   DEFAULT_OCR_FORECAST_SNAPSHOT,
   LATEST_KNOWN_RBNZ_MPS,
+  addMonthsToDate,
   createCalculationRun,
   evaluateLatestMpsWarnings
 } from "./snapshotLayer.js";
 import { buildSummaryPayload, monthlyEquivalent } from "./summaryPayload.js";
 
 const FORM_STORAGE_KEY = "trimratenz-form";
+
+function displayDate(date) {
+  if (!date) return "";
+  return new Intl.DateTimeFormat("en-NZ", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC"
+  }).format(new Date(`${date}T00:00:00Z`));
+}
 
 function getStoredMortgageFormState() {
   const initialState = getInitialMortgageFormState();
@@ -68,6 +79,7 @@ function App() {
   const [selectedForecastTrancheId, setSelectedForecastTrancheId] = useState("");
   const [selectedForecastTermMonths, setSelectedForecastTermMonths] = useState(12);
   const [selectedMarketBankId, setSelectedMarketBankId] = useState("");
+  const [selectedSummaryScope, setSelectedSummaryScope] = useState("total");
   const trackedEvents = useRef(new Set());
   const [marketRates, setMarketRates] = useState({
     rates: MARKET_RATE_SNAPSHOT.rates,
@@ -164,15 +176,30 @@ function App() {
       displayedTranches.map((tranche) => {
         const amount = isSplitLoan ? toPositive(tranche.amount) : loanAmount;
         const rate = toNumber(tranche.rate);
-        const termYears = Math.max(toNumber(tranche.termYears), 1);
+        const termYears = toNumber(tranche.termYears);
+        const calculationTermYears = Math.max(termYears, 1);
         const frequency = tranche.frequency || "Monthly";
+        const usesActualRepayment =
+          tranche.paysMoreThanMinimum === "yes" || Boolean(String(tranche.repaymentAmount ?? "").trim());
         const repaymentDetails = buildLoanPartRepaymentDetails({
           principal: amount,
           annualRate: rate,
-          years: termYears,
+          years: calculationTermYears,
           frequency,
-          userCurrentRepayment: tranche.repaymentAmount
+          userCurrentRepayment: usesActualRepayment ? tranche.repaymentAmount : ""
         });
+        const fixedTermMonths = tranche.type === "Fixed" ? Math.max(toNumber(tranche.fixedTermMonths || "12"), 0) : 0;
+        const fixedMonths = tranche.type === "Fixed" ? Math.max(toNumber(tranche.fixedMonths), 0) : 0;
+        const fixedTermTooLong =
+          tranche.type === "Fixed" && termYears > 0 && (fixedMonths > termYears * 12 || fixedTermMonths > termYears * 12);
+        const needsActualRepayment = usesActualRepayment && String(tranche.repaymentAmount ?? "").trim() === "";
+        const repaymentValidationError = needsActualRepayment
+          ? {
+              code: "current-repayment-below-minimum",
+              minimumRepaymentExact: repaymentDetails.calculatedMinimumRepaymentExact,
+              minimumRepaymentRounded: repaymentDetails.calculatedMinimumRepaymentRounded
+            }
+          : repaymentDetails.repaymentValidationError;
 
         return {
           ...tranche,
@@ -180,17 +207,19 @@ function App() {
           rate,
           hasInterestRate: String(tranche.rate ?? "").trim() !== "",
           termYears,
+          calculationTermYears,
+          hasFrequency: Boolean(frequency),
           repaymentAmount: toPositive(tranche.repaymentAmount),
           calculatedMinimumRepaymentExact: repaymentDetails.calculatedMinimumRepaymentExact,
           calculatedMinimumRepaymentRounded: repaymentDetails.calculatedMinimumRepaymentRounded,
           userCurrentRepaymentExact: repaymentDetails.userCurrentRepaymentExact,
           effectiveCurrentRepaymentExact: repaymentDetails.effectiveCurrentRepaymentExact,
           repaymentSource: repaymentDetails.repaymentSource,
-          repaymentValidationError: repaymentDetails.repaymentValidationError,
+          repaymentValidationError,
           frequency,
-          fixedTermMonths: tranche.type === "Fixed" ? Math.max(toNumber(tranche.fixedTermMonths || "12"), 0) : 0,
-          fixedMonths: tranche.type === "Fixed" ? Math.max(toNumber(tranche.fixedMonths), 0) : 0,
-          offsetBalance: Math.min(toPositive(tranche.offsetBalance), isSplitLoan ? toPositive(tranche.amount) : loanAmount)
+          fixedTermMonths,
+          fixedMonths,
+          fixedTermTooLong
         };
       }),
     [displayedTranches, isSplitLoan, loanAmount]
@@ -199,7 +228,6 @@ function App() {
     () =>
       normalizedTranches.map((tranche) => ({
         ...tranche,
-        amount: Math.max(tranche.amount - tranche.offsetBalance, 0),
         repaymentAmount: tranche.effectiveCurrentRepaymentExact
       })),
     [normalizedTranches]
@@ -213,19 +241,15 @@ function App() {
       tranche.amount > 0 &&
       tranche.hasInterestRate &&
       tranche.rate >= 0 &&
+      tranche.rate <= 15 &&
       tranche.termYears > 0 &&
-      tranche.frequency &&
+      tranche.hasFrequency &&
       tranche.type &&
       (tranche.type === "Variable" || tranche.fixedMonths >= 0) &&
+      !tranche.fixedTermTooLong &&
       !tranche.repaymentValidationError
   );
   const setupComplete = loanAmount > 0 && allTranchesComplete && splitMatches;
-  const completionItems = [
-    { label: "Loan balance", done: loanAmount > 0 },
-    { label: "Rate entered", done: normalizedTranches.every((tranche) => tranche.hasInterestRate && tranche.rate >= 0) },
-    { label: "Term checked", done: normalizedTranches.every((tranche) => tranche.termYears > 0) },
-    { label: isSplitLoan ? "Split matches" : "Single loan", done: splitMatches }
-  ];
 
   const loan = useMemo(() => weightedLoanSnapshot(mathTranches, "Monthly"), [mathTranches]);
   const modelRate = loan.weightedRate || 0;
@@ -309,11 +333,101 @@ function App() {
     () => remainingPrincipalAndInterestToFixedEnd(forecastTranches, primaryFrequency),
     [forecastTranches, primaryFrequency]
   );
-  const fixedEndPrincipalShare =
-    remainingFixedPayments.total > 0 ? (remainingFixedPayments.principal / remainingFixedPayments.total) * 100 : 0;
-  const fixedEndInterestShare =
-    remainingFixedPayments.total > 0 ? (remainingFixedPayments.interest / remainingFixedPayments.total) * 100 : 0;
   const tranchesWithPayments = useMemo(() => trancheRows(mathTranches, primaryFrequency), [mathTranches, primaryFrequency]);
+  useEffect(() => {
+    if (selectedSummaryScope !== "total" && !forecastTranches.some((tranche) => tranche.id === selectedSummaryScope)) {
+      setSelectedSummaryScope("total");
+    }
+  }, [forecastTranches, selectedSummaryScope]);
+  const selectedSummaryDetails = useMemo(() => {
+    if (selectedSummaryScope === "total") {
+      const hasFixedEndPayments = remainingFixedPayments.total > 0;
+      const principalShare =
+        remainingFixedPayments.total > 0 ? (remainingFixedPayments.principal / remainingFixedPayments.total) * 100 : 0;
+      const interestShare =
+        remainingFixedPayments.total > 0 ? (remainingFixedPayments.interest / remainingFixedPayments.total) * 100 : 0;
+
+      return {
+        title: "Total mortgage",
+        description: `${forecastTranches.length} ${forecastTranches.length === 1 ? "loan part" : "loan parts"} combined`,
+        repaymentLabel: `${repaymentFrequencyLabel} Repayment`,
+        repaymentValue: currency(summary.repayment),
+        repaymentSub: repaymentFrequencyNote,
+        principalLabel: hasFixedEndPayments ? "Remaining Principal" : "Current Balance",
+        principalValue: hasFixedEndPayments ? currency(remainingFixedPayments.principal) : currency(effectiveLoan),
+        principalSub: hasFixedEndPayments
+          ? `${percent(principalShare, 0)} principal before fixed terms end`
+          : "Variable balance available to compare",
+        interestLabel: hasFixedEndPayments ? "Remaining Interest" : "Current Rate",
+        interestValue: hasFixedEndPayments ? currency(remainingFixedPayments.interest) : percent(modelRate),
+        interestSub: hasFixedEndPayments
+          ? `${percent(interestShare, 0)} interest before fixed terms end`
+          : "Weighted current variable rate",
+        totalLabel: hasFixedEndPayments ? "Total P&I to Fixed End" : "Fixing Status",
+        totalValue: hasFixedEndPayments ? currency(remainingFixedPayments.total) : "Ready now",
+        totalSub: hasFixedEndPayments
+          ? "Principal + interest before fixed terms end"
+          : "Compare fixed-rate options from today"
+      };
+    }
+
+    const tranche = forecastTranches.find((item) => item.id === selectedSummaryScope) ?? forecastTranches[0];
+    const paymentRow = tranchesWithPayments.find((item) => item.id === tranche?.id);
+    const fixedPaymentRow = remainingFixedPayments.rows.find((item) => item.id === tranche?.id);
+    const principal = fixedPaymentRow?.principal ?? 0;
+    const interest = fixedPaymentRow?.interest ?? 0;
+    const total = fixedPaymentRow?.total ?? 0;
+    const principalShare = total > 0 ? (principal / total) * 100 : 0;
+    const interestShare = total > 0 ? (interest / total) * 100 : 0;
+    const isVariable = tranche?.type === "Variable";
+    const fixedTermSummary =
+      tranche?.type === "Fixed"
+        ? `Fixed term: ${monthsLabel(tranche.fixedTermMonths)} | Time remaining: ${monthsLabel(
+            tranche.fixedMonths
+          )} | Estimated end date: ${displayDate(addMonthsToDate(CALCULATION_AS_OF_DATE, tranche.fixedMonths))}`
+        : "Variable rate | No fixed term end date";
+
+    return {
+      title: `Loan part ${tranche?.index ?? 1}`,
+      description: `${currency(tranche?.amount ?? 0)} at ${percent(tranche?.rate ?? 0)} | ${fixedTermSummary}`,
+      repaymentLabel: `${tranche?.frequency ?? primaryFrequency} Repayment`,
+      repaymentValue: currency(paymentRow?.repayment ?? 0),
+      repaymentSub: `${tranche?.type ?? "Loan part"}; ${tranche?.termYears ?? modelYears} yr term`,
+      principalLabel: isVariable ? "Current Balance" : "Remaining Principal",
+      principalValue: isVariable ? currency(tranche?.amount ?? 0) : currency(principal),
+      principalSub: isVariable
+        ? "Variable balance available to compare"
+        : total > 0
+          ? `${percent(principalShare, 0)} principal before fixed term ends`
+          : "No fixed-term period selected",
+      interestLabel: isVariable ? "Current Rate" : "Remaining Interest",
+      interestValue: isVariable ? percent(tranche?.rate ?? 0) : currency(interest),
+      interestSub: isVariable
+        ? "Current floating or variable rate"
+        : total > 0
+          ? `${percent(interestShare, 0)} interest before fixed term ends`
+          : "No fixed-term interest window",
+      totalLabel: isVariable ? "Fixing Status" : "Total P&I to Fixed End",
+      totalValue: isVariable ? "Ready now" : currency(total),
+      totalSub: isVariable
+        ? "Compare fixed-rate options from today"
+        : total > 0
+          ? "Principal + interest before this fixed term ends"
+          : "No fixed-term payments to show"
+    };
+  }, [
+    effectiveLoan,
+    forecastTranches,
+    modelYears,
+    modelRate,
+    primaryFrequency,
+    remainingFixedPayments,
+    repaymentFrequencyLabel,
+    repaymentFrequencyNote,
+    selectedSummaryScope,
+    summary.repayment,
+    tranchesWithPayments
+  ]);
   const payoffRows = summary.standard.rows.map((row, index) => ({
     year: row.year,
     standardDebt: row.debt,
@@ -435,7 +549,6 @@ function App() {
         loanStructure: {
           loanStructure,
           tranches: normalizedTranches,
-          offsetAdjustedTranches: mathTranches,
           splitMatches
         },
         repaymentSummary: {
@@ -538,7 +651,6 @@ function App() {
             index: index + 1,
             balance: tranche.amount,
             effectiveBalance: mathTranches[index]?.amount ?? tranche.amount,
-            offsetBalance: tranche.offsetBalance,
             rate: tranche.rate,
             termYears: tranche.termYears,
             calculatedMinimumRepaymentExact: tranche.calculatedMinimumRepaymentExact,
@@ -667,7 +779,7 @@ function App() {
         id,
         field,
         value,
-        decimal: ["amount", "rate", "termYears", "repaymentAmount", "fixedTermMonths", "fixedMonths", "offsetBalance"].includes(field)
+        decimal: ["amount", "rate", "termYears", "repaymentAmount", "fixedTermMonths", "fixedMonths"].includes(field)
       });
     });
   }
@@ -746,18 +858,15 @@ function App() {
       </header>
 
       <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-        <LoanBalanceStep loanBalance={loanBalance} hasLoanBalance={loanAmount > 0} dispatch={dispatch} />
-
-        <LoanStructureStep
+        <LoanBalanceStep
           isSplitLoan={isSplitLoan}
           loanAmount={loanAmount}
+          loanBalance={loanBalance}
           loanStructure={loanStructure}
           displayedTranches={displayedTranches}
           normalizedTranches={normalizedTranches}
           trancheTotal={trancheTotal}
           splitMatches={splitMatches}
-          setupComplete={setupComplete}
-          completionItems={completionItems}
           dispatch={dispatch}
           updateTranche={updateTranche}
           addTranche={addTranche}
@@ -766,38 +875,82 @@ function App() {
 
         {setupComplete && (
           <section className="space-y-5">
+            <div className="rounded-xl border border-[#E2DDD5] bg-white p-4 shadow-[0_12px_34px_rgba(27,42,34,0.06)]">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wide text-[#3A6047]">Repayment view</p>
+                  <h2 className="mt-1 text-xl font-black text-[#1B2A22]">{selectedSummaryDetails.title}</h2>
+                  <p className="mt-1 text-sm font-medium text-[#7B756E]">{selectedSummaryDetails.description}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSummaryScope("total")}
+                    className={`min-h-10 rounded-lg px-3 text-sm font-black transition ${
+                      selectedSummaryScope === "total"
+                        ? "bg-[#3A6047] text-white shadow-sm"
+                        : "border border-[#E2DDD5] bg-[#F7F5F0] text-[#7B756E] hover:bg-white hover:text-[#1B2A22]"
+                    }`}
+                  >
+                    Total mortgage
+                  </button>
+                  {forecastTranches.map((tranche) => (
+                    <button
+                      key={tranche.id}
+                      type="button"
+                      onClick={() => setSelectedSummaryScope(tranche.id)}
+                      className={`min-h-10 rounded-lg px-3 text-sm font-black transition ${
+                        selectedSummaryScope === tranche.id
+                          ? "bg-[#3A6047] text-white shadow-sm"
+                          : "border border-[#E2DDD5] bg-[#F7F5F0] text-[#7B756E] hover:bg-white hover:text-[#1B2A22]"
+                      }`}
+                    >
+                      Part {tranche.index}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
             <div className="grid gap-3 md:grid-cols-4">
               <Stat
-                label={`${repaymentFrequencyLabel} Repayment`}
-                value={currency(summary.repayment)}
-                sub={repaymentFrequencyNote}
+                label={selectedSummaryDetails.repaymentLabel}
+                value={selectedSummaryDetails.repaymentValue}
+                sub={selectedSummaryDetails.repaymentSub}
                 icon={Banknote}
               />
               <Stat
-                label="Remaining Principal"
-                value={currency(remainingFixedPayments.principal)}
-                sub={`${percent(fixedEndPrincipalShare, 0)} of payments before current fixed terms end`}
+                label={selectedSummaryDetails.principalLabel}
+                value={selectedSummaryDetails.principalValue}
+                sub={selectedSummaryDetails.principalSub}
                 icon={SlidersHorizontal}
               />
               <Stat
-                label="Remaining Interest"
-                value={currency(remainingFixedPayments.interest)}
-                sub={`${percent(fixedEndInterestShare, 0)} of payments before current fixed terms end`}
+                label={selectedSummaryDetails.interestLabel}
+                value={selectedSummaryDetails.interestValue}
+                sub={selectedSummaryDetails.interestSub}
                 icon={CalendarClock}
               />
               <Stat
-                label="Total P&I to Fixed End"
-                value={currency(remainingFixedPayments.total)}
-                sub={`${remainingFixedPayments.periodsRemaining} scheduled repayments before current fixed terms end`}
+                label={selectedSummaryDetails.totalLabel}
+                value={selectedSummaryDetails.totalValue}
+                sub={selectedSummaryDetails.totalSub}
                 icon={CalendarClock}
               />
             </div>
+
+            <RepaymentBreakdownTable
+              primaryFrequency={primaryFrequency}
+              repaymentFrequencyLabel={repaymentFrequencyLabel}
+              hasMixedRepaymentFrequencies={hasMixedRepaymentFrequencies}
+              summary={summary}
+              tranchesWithPayments={tranchesWithPayments}
+            />
 
             <RepaymentSummaryStep
               primaryFrequency={primaryFrequency}
               repaymentFrequencyLabel={repaymentFrequencyLabel}
               repaymentFrequencyNote={repaymentFrequencyNote}
-              hasMixedRepaymentFrequencies={hasMixedRepaymentFrequencies}
               summary={summary}
               modelRate={modelRate}
               modelYears={modelYears}
@@ -807,7 +960,6 @@ function App() {
               cashAfterRepayment={netCash.remainingCash}
               dtiRatio={dtiRatio}
               dti={dti}
-              tranchesWithPayments={tranchesWithPayments}
               dispatch={dispatch}
             />
 

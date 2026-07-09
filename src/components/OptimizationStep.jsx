@@ -17,7 +17,7 @@ export function OptimizationStep({
 }) {
   return (
     <StepShell
-      step="Step 6"
+      step="Step 5"
       icon={PiggyBank}
       title="What changes could improve the numbers?"
       detail="Model one controlled change at a time: extra repayments, interest-only period, or loan structure."
@@ -163,6 +163,7 @@ export function OptimizationStep({
                 stroke="#C86A53"
                 fill="url(#standardDebt)"
                 strokeWidth={2}
+                isAnimationActive={false}
               />
               <Area
                 type="monotone"
@@ -171,6 +172,7 @@ export function OptimizationStep({
                 stroke="#3A6047"
                 fill="url(#fasterDebt)"
                 strokeWidth={3}
+                isAnimationActive={false}
               />
             </AreaChart>
           </ResponsiveContainer>
