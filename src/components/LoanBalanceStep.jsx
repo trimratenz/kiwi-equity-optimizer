@@ -4,20 +4,17 @@ import { FIXED_TERM_OPTIONS, FREQUENCY_CONFIG, currency } from "../financialMode
 import { Field, NumberInput, Segmented, Select } from "./ui";
 
 export function LoanBalanceStep({
+  hasExistingLoan,
   isSplitLoan,
-  loanAmount,
-  loanBalance,
   loanStructure,
   displayedTranches,
   normalizedTranches,
-  trancheTotal,
-  splitMatches,
   dispatch,
   updateTranche,
   addTranche,
   removeTranche
 }) {
-  const hasLoanBalance = loanAmount > 0;
+  const isExistingLoan = hasExistingLoan === "yes";
 
   return (
     <section className="rounded-xl border border-[#E2DDD5] bg-white p-5 shadow-[0_18px_50px_rgba(27,42,34,0.07)] sm:p-8">
@@ -31,27 +28,30 @@ export function LoanBalanceStep({
         </div>
 
         <div className="grid gap-4">
-          <Field
-            label="Home loan balance"
-            error={!hasLoanBalance ? "Enter a loan balance greater than $0." : undefined}
-          >
-            <NumberInput
-              value={loanBalance}
-              onChange={(value) => dispatch({ type: "SET_FIELD", field: "loanBalance", value, decimal: true })}
-              step={10000}
-              prefix="$"
-              placeholder="0"
-              thousands
+          <Field label="Do you already have a home loan?">
+            <Segmented
+              value={hasExistingLoan}
+              onChange={(value) => dispatch({ type: "SET_FIELD", field: "hasExistingLoan", value })}
+              options={[
+                { value: "yes", label: "Yes" },
+                { value: "no", label: "No" }
+              ]}
             />
           </Field>
 
-          <Field label="Is this loan split into different parts?">
+          <Field
+            label={
+              isExistingLoan
+                ? "Is your home loan split into different tranches?"
+                : "Do you want to split your new loan into different tranches?"
+            }
+          >
             <Segmented
               value={loanStructure}
               onChange={(value) => dispatch({ type: "SET_FIELD", field: "loanStructure", value })}
               options={[
                 { value: "single", label: "No, one loan" },
-                { value: "split", label: "Yes, split loan" }
+                { value: "split", label: "Yes, split into tranches" }
               ]}
             />
           </Field>
@@ -62,19 +62,23 @@ export function LoanBalanceStep({
             const frequencyLabel = FREQUENCY_CONFIG[normalized?.frequency || tranche.frequency]?.label || "period";
             const paysMoreThanMinimum =
               tranche.paysMoreThanMinimum === "yes" || Boolean(String(tranche.repaymentAmount ?? "").trim());
-            const canShowMinimum = normalized?.amount > 0 && normalized?.hasInterestRate && normalized?.termYears > 0;
+            const canShowMinimum =
+              normalized?.amount > 0 &&
+              normalized?.hasInterestRate &&
+              normalized?.termYears > 0 &&
+              (!isExistingLoan || normalized?.repaymentPrincipal > 0);
 
             return (
               <div key={tranche.id} className="rounded-xl border border-[#E2DDD5] bg-[#FFFEFC] p-4 sm:p-5">
                 <div className="mb-4 flex items-center justify-between gap-3">
-                  <p className="text-lg font-black">{isSplitLoan ? `Loan part ${index + 1}` : "Loan details"}</p>
+                  <p className="text-lg font-black">{isSplitLoan ? `Loan tranche ${index + 1}` : "Loan details"}</p>
                   {isSplitLoan && (
                     <button
                       type="button"
                       onClick={() => removeTranche(tranche.id)}
                       disabled={displayedTranches.length === 1}
                       className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#E2DDD5] text-[#7B756E] hover:border-[#C86A53]/70 hover:bg-[#C86A53]/10 hover:text-[#C86A53] disabled:cursor-not-allowed disabled:opacity-35"
-                      title="Remove loan part"
+                      title="Remove loan tranche"
                     >
                       <Trash2 size={16} aria-hidden="true" />
                     </button>
@@ -82,14 +86,30 @@ export function LoanBalanceStep({
                 </div>
 
                 <div className="grid gap-4">
-                  {isSplitLoan && (
+                  <Field
+                    label={isExistingLoan ? "Current home loan balance" : "New loan amount"}
+                    hint={isExistingLoan ? "Use the amount you owe today." : undefined}
+                    error={normalized?.amount <= 0 ? `Enter a ${isExistingLoan ? "current home loan balance" : "new loan amount"} greater than $0.` : undefined}
+                  >
+                    <NumberInput
+                      value={tranche.amount}
+                      onChange={(value) => updateTranche(tranche.id, { amount: value })}
+                      step={5000}
+                      prefix="$"
+                      placeholder="0"
+                      thousands
+                    />
+                  </Field>
+
+                  {isExistingLoan && (
                     <Field
-                      label="Home loan balance"
-                      error={normalized?.amount <= 0 ? "Enter a loan balance greater than $0." : undefined}
+                      label="Original home loan amount"
+                      hint="Use the amount your repayments were originally based on."
+                      error={normalized?.repaymentPrincipal <= 0 ? "Enter an original home loan amount greater than $0." : undefined}
                     >
                       <NumberInput
-                        value={tranche.amount}
-                        onChange={(value) => updateTranche(tranche.id, { amount: value })}
+                        value={tranche.originalLoanAmount}
+                        onChange={(value) => updateTranche(tranche.id, { originalLoanAmount: value })}
                         step={5000}
                         prefix="$"
                         placeholder="0"
@@ -100,7 +120,7 @@ export function LoanBalanceStep({
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Field
-                      label="Current interest rate"
+                      label={isExistingLoan ? "Current interest rate" : "Interest rate"}
                       error={
                         !normalized?.hasInterestRate || normalized?.rate < 0 || normalized?.rate > 15
                           ? "Enter an interest rate between 0% and 15%."
@@ -116,8 +136,9 @@ export function LoanBalanceStep({
                       />
                     </Field>
                     <Field
-                      label="Remaining loan term"
-                      error={normalized?.termYears <= 0 ? "Enter a remaining loan term greater than 0." : undefined}
+                      label="Loan term"
+                      hint="Use the documented loan term, not just the years left."
+                      error={normalized?.termYears <= 0 ? "Enter a loan term greater than 0." : undefined}
                     >
                       <NumberInput
                         value={tranche.termYears}
@@ -162,30 +183,37 @@ export function LoanBalanceStep({
                   </div>
 
                   {tranche.type === "Fixed" && (
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    <div className={`grid gap-4 ${isExistingLoan ? "sm:grid-cols-2" : ""}`}>
                       <Field label="Fixed term">
                         <Segmented
                           value={tranche.fixedTermMonths || "12"}
-                          onChange={(value) => updateTranche(tranche.id, { fixedTermMonths: value, fixedMonths: value })}
+                          onChange={(value) =>
+                            updateTranche(tranche.id, {
+                              fixedTermMonths: value,
+                              fixedMonths: value
+                            })
+                          }
                           options={FIXED_TERM_OPTIONS.map((option) => ({
                             value: String(option.months),
                             label: option.label
                           }))}
                         />
                       </Field>
-                      <Field
-                        label="Current fixed term remaining"
-                        hint="Months"
-                        error={normalized?.fixedTermTooLong || normalized?.fixedMonths > termMonths ? "Fixed term cannot be longer than the remaining loan term." : undefined}
-                      >
-                        <NumberInput
-                          value={tranche.fixedMonths}
-                          onChange={(value) => updateTranche(tranche.id, { fixedMonths: value })}
-                          min={0}
-                          max={60}
-                          suffix="mo"
-                        />
-                      </Field>
+                      {isExistingLoan && (
+                        <Field
+                          label="Current fixed term remaining"
+                          hint="Months"
+                          error={normalized?.fixedTermTooLong || normalized?.fixedMonths > termMonths ? "Fixed term cannot be longer than the loan term." : undefined}
+                        >
+                          <NumberInput
+                            value={tranche.fixedMonths}
+                            onChange={(value) => updateTranche(tranche.id, { fixedMonths: value })}
+                            min={0}
+                            max={60}
+                            suffix="mo"
+                          />
+                        </Field>
+                      )}
                     </div>
                   )}
 
@@ -251,15 +279,8 @@ export function LoanBalanceStep({
               className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-dashed border-[#3A6047]/60 bg-[#3A6047]/10 px-4 text-sm font-black text-[#3A6047] hover:bg-[#3A6047] hover:text-white"
             >
               <Plus size={18} aria-hidden="true" />
-              Add another loan part
+              Add another loan tranche
             </button>
-          )}
-
-          {isSplitLoan && !splitMatches && (
-            <p className="rounded-lg bg-[#C86A53]/10 p-3 text-sm font-bold text-[#C86A53]">
-              Your loan parts add to {currency(trancheTotal)}, but your total loan is {currency(loanAmount)}. Adjust the
-              part balances until they match.
-            </p>
           )}
         </div>
       </div>

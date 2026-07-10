@@ -63,7 +63,7 @@ export function MarketRateComparisonStep({
           </colgroup>
           <thead className="bg-[#F7F5F0] text-xs uppercase tracking-wide text-[#7B756E]">
             <tr>
-              <th className="p-3">Loan part</th>
+              <th className="p-3">Tranche</th>
               <th className="p-3">Your setup</th>
               <th className="p-3">{matchedRateLabel}</th>
               <th className="p-3">Lowest bank</th>
@@ -74,23 +74,23 @@ export function MarketRateComparisonStep({
           </thead>
           <tbody className="divide-y divide-[#E2DDD5] text-[#1B2A22]">
             {marketRateRows.map((row) => {
-              const isRepaymentHigher = row.repaymentDifference > 0;
+              const isRepaymentLower = row.repaymentDifference > 0;
               const isRepaymentSame = Math.abs(row.repaymentDifference) < 0.5;
               const repaymentTone = isRepaymentSame
                 ? "text-[#7B756E]"
-                : isRepaymentHigher
-                  ? "text-[#C86A53]"
-                  : "text-[#3A6047]";
+                : isRepaymentLower
+                  ? "text-[#3A6047]"
+                  : "text-[#C86A53]";
+              const rateTone = Math.abs(row.difference) < 0.05 ? "text-[#7B756E]" : row.difference < 0 ? "text-[#3A6047]" : "text-[#C86A53]";
 
               return (
                 <tr key={row.id}>
                 <td className="p-3 align-top">
-                  <p className="font-black">Loan part {row.index}</p>
+                  <p className="font-black">Tranche {row.index}</p>
                   <p className="text-xs font-medium text-[#7B756E]">{currency(row.balance)}</p>
                 </td>
                 <td className="p-3 align-top">
-                  <p className="font-bold">{row.fixedTermLabel}</p>
-                  <p className="text-xs font-medium text-[#7B756E]">{row.type}</p>
+                  <p className="font-bold">{row.type} {row.fixedTermLabel}</p>
                 </td>
                 <td className="p-3 align-top">
                   <p className="font-bold">{percent(row.marketRate)}</p>
@@ -103,7 +103,7 @@ export function MarketRateComparisonStep({
                   <p className="text-xs font-medium text-[#7B756E]">{row.lowestBank}</p>
                 </td>
                 <td className="p-3 align-top">{percent(row.currentRate)}</td>
-                <td className="p-3 align-top font-bold text-[#3A6047]">
+                <td className={`p-3 align-top font-bold ${rateTone}`}>
                   {row.difference >= 0 ? "+" : ""}
                   {percent(row.difference)}
                 </td>

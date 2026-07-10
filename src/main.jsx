@@ -21,10 +21,12 @@ import {
   currency,
   dtiAssessment,
   debtToIncomeRatio,
+  forecastRefixRows,
   marketTermMonths,
   netCashPosition,
   monthsLabel,
   percent,
+  paymentToAnnual,
   repaymentToIncomeRatio,
   remainingPrincipalAndInterestToFixedEnd,
   summarizeMortgage,
@@ -62,12 +64,23 @@ function getStoredMortgageFormState() {
     if (!stored) return initialState;
 
     const parsed = JSON.parse(stored);
+    const storedTranches = Array.isArray(parsed.tranches) && parsed.tranches.length > 0 ? parsed.tranches : initialState.tranches;
+    const migratedTranches = storedTranches.map((tranche, index) =>
+      index === 0
+        ? {
+            ...tranche,
+            amount: tranche.amount || parsed.loanBalance || "",
+            originalLoanAmount: tranche.originalLoanAmount || parsed.originalLoanAmount || ""
+          }
+        : tranche
+    );
+
     return {
       ...initialState,
       ...parsed,
       extraPayment: parsed.extraPayment === "100" ? "" : parsed.extraPayment ?? initialState.extraPayment,
       outgoingCosts: parsed.outgoingCosts ?? initialState.outgoingCosts,
-      tranches: Array.isArray(parsed.tranches) && parsed.tranches.length > 0 ? parsed.tranches : initialState.tranches
+      tranches: migratedTranches
     };
   } catch {
     return initialState;
@@ -94,7 +107,7 @@ function App() {
     status: "idle",
     error: ""
   });
-  const { loanBalance, loanStructure, salaryIncome, extraPayment, outgoingCosts, interestOnlyYears, tranches } = formState;
+  const { hasExistingLoan, loanStructure, salaryIncome, extraPayment, outgoingCosts, interestOnlyYears, tranches } = formState;
 
   useEffect(() => {
     window.localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(formState));
@@ -168,13 +181,14 @@ function App() {
     });
   }, [dataWarnings]);
 
-  const loanAmount = toPositive(loanBalance);
+  const isExistingLoan = hasExistingLoan === "yes";
   const isSplitLoan = loanStructure === "split";
   const displayedTranches = useMemo(() => (isSplitLoan ? tranches : tranches.slice(0, 1)), [isSplitLoan, tranches]);
   const normalizedTranches = useMemo(
     () =>
       displayedTranches.map((tranche) => {
-        const amount = isSplitLoan ? toPositive(tranche.amount) : loanAmount;
+        const amount = toPositive(tranche.amount);
+        const repaymentPrincipal = isExistingLoan ? toPositive(tranche.originalLoanAmount) : amount;
         const rate = toNumber(tranche.rate);
         const termYears = toNumber(tranche.termYears);
         const calculationTermYears = Math.max(termYears, 1);
@@ -182,7 +196,7 @@ function App() {
         const usesActualRepayment =
           tranche.paysMoreThanMinimum === "yes" || Boolean(String(tranche.repaymentAmount ?? "").trim());
         const repaymentDetails = buildLoanPartRepaymentDetails({
-          principal: amount,
+          principal: repaymentPrincipal,
           annualRate: rate,
           years: calculationTermYears,
           frequency,
@@ -204,6 +218,7 @@ function App() {
         return {
           ...tranche,
           amount,
+          repaymentPrincipal,
           rate,
           hasInterestRate: String(tranche.rate ?? "").trim() !== "",
           termYears,
@@ -222,23 +237,22 @@ function App() {
           fixedTermTooLong
         };
       }),
-    [displayedTranches, isSplitLoan, loanAmount]
+    [displayedTranches, isExistingLoan]
   );
   const mathTranches = useMemo(
     () =>
       normalizedTranches.map((tranche) => ({
-        ...tranche,
-        repaymentAmount: tranche.effectiveCurrentRepaymentExact
+        ...tranche
       })),
     [normalizedTranches]
   );
 
-  const trancheTotal = normalizedTranches.reduce((sum, tranche) => sum + tranche.amount, 0);
   const effectiveLoan = mathTranches.reduce((sum, tranche) => sum + tranche.amount, 0);
-  const splitMatches = !isSplitLoan || Math.abs(trancheTotal - loanAmount) <= 1;
+  const loanAmount = effectiveLoan;
   const allTranchesComplete = normalizedTranches.every(
     (tranche) =>
       tranche.amount > 0 &&
+      (!isExistingLoan || tranche.repaymentPrincipal > 0) &&
       tranche.hasInterestRate &&
       tranche.rate >= 0 &&
       tranche.rate <= 15 &&
@@ -249,7 +263,7 @@ function App() {
       !tranche.fixedTermTooLong &&
       !tranche.repaymentValidationError
   );
-  const setupComplete = loanAmount > 0 && allTranchesComplete && splitMatches;
+  const setupComplete = loanAmount > 0 && allTranchesComplete;
 
   const loan = useMemo(() => weightedLoanSnapshot(mathTranches, "Monthly"), [mathTranches]);
   const modelRate = loan.weightedRate || 0;
@@ -458,7 +472,8 @@ function App() {
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [marketRates.rawRecords]);
-  const marketRateRows = forecastTranches.map((tranche) => {
+  function buildMarketRateRows(selectedBankId = "") {
+    return forecastTranches.map((tranche) => {
     const targetMonths = tranche.type === "Fixed" ? tranche.fixedTermMonths || tranche.fixedMonths : 0;
     const comparableRates = marketRates.rates.filter((rate) =>
       tranche.type === "Variable" ? marketTermMonths(rate.term) === 0 : marketTermMonths(rate.term) > 0
@@ -470,7 +485,7 @@ function App() {
       marketRates.rates[0];
     const matchedMonths = closestRate.termInMonths ?? marketTermMonths(closestRate.term);
     const selectedBankRate = marketRates.rawRecords.find(
-      (record) => record.institutionId === selectedMarketBankId && record.termInMonths === matchedMonths
+      (record) => record.institutionId === selectedBankId && record.termInMonths === matchedMonths
     );
     const lowestRate = marketRates.rawRecords
       .filter((record) => record.termInMonths === matchedMonths)
@@ -502,7 +517,50 @@ function App() {
       marketRepayment,
       repaymentDifference
     };
-  });
+    });
+  }
+  const marketRateRows = buildMarketRateRows(selectedMarketBankId);
+  const averageMarketRateRows = selectedMarketBankId ? buildMarketRateRows() : marketRateRows;
+  const trancheForecasts = useMemo(
+    () =>
+      forecastTranches.map((tranche) => {
+        const currentRepayment = tranchesWithPayments.find((item) => item.id === tranche.id)?.repayment ?? 0;
+        const forecastOptions = forecastRefixRows({
+          principal: tranche.amount,
+          currentRate: tranche.rate,
+          years: tranche.termYears,
+          frequency: tranche.frequency,
+          currentPayment: currentRepayment,
+          fixedEndsInMonths: tranche.fixedMonths,
+          marketRates: marketRates.rates,
+          bankRateSnapshotId: marketRates.snapshotId,
+          ocrSnapshot: DEFAULT_OCR_FORECAST_SNAPSHOT
+        });
+        const selectedOption =
+          forecastOptions.find((option) => option.months === selectedForecastTermMonths) ??
+          forecastOptions.find((option) => option.months === 12) ??
+          forecastOptions[0];
+
+        return {
+          id: tranche.id,
+          index: tranche.index,
+          type: tranche.type,
+          frequency: tranche.frequency,
+          fixedTermLabel: tranche.type === "Fixed" ? monthsLabel(tranche.fixedMonths) : "Variable",
+          refixPointLabel: selectedOption?.refixPointLabel ?? "now",
+          fixedTermEnd:
+            tranche.type === "Fixed"
+              ? displayDate(addMonthsToDate(CALCULATION_AS_OF_DATE, tranche.fixedMonths))
+              : "Available now",
+          forecastOcr: selectedOption?.forecastOcr ?? 0,
+          currentRepayment,
+          scenarios: selectedOption?.scenarios ?? []
+        };
+      }),
+    [forecastTranches, marketRates.rates, marketRates.snapshotId, selectedForecastTermMonths, tranchesWithPayments]
+  );
+  const variableOnly = forecastTranches.length > 0 && forecastTranches.every((tranche) => tranche.type === "Variable");
+  const averageFixedRates = marketRates.rates.filter((rate) => marketTermMonths(rate.term) > 0);
   const summaryContent = useMemo(
     () =>
       buildPlainEnglishSummary({
@@ -546,14 +604,13 @@ function App() {
     () => ({
       steps: {
         loanBalance: {
-          loanBalance,
+          loanBalance: loanAmount,
           loanAmount,
           effectiveLoan
         },
         loanStructure: {
           loanStructure,
-          tranches: normalizedTranches,
-          splitMatches
+          tranches: normalizedTranches
         },
         repaymentSummary: {
           periodIncome: salaryAmount,
@@ -606,13 +663,11 @@ function App() {
       rawFormState: formState
     }),
     [
-      loanBalance,
       loanAmount,
       effectiveLoan,
       loanStructure,
       normalizedTranches,
       mathTranches,
-      splitMatches,
       salaryAmount,
       modelRate,
       modelYears,
@@ -642,7 +697,9 @@ function App() {
         ratesSnapshotId: marketRates.snapshotId,
         ocrSnapshotId: DEFAULT_OCR_FORECAST_SNAPSHOT.id,
         inputs: {
+          hasExistingLoan: isExistingLoan,
           loanBalance: loanAmount,
+          originalLoanAmount: isExistingLoan ? normalizedTranches.reduce((sum, tranche) => sum + tranche.repaymentPrincipal, 0) : null,
           loanStructure,
           repaymentFrequency: primaryFrequency,
           incomePerPeriod: salaryAmount,
@@ -654,6 +711,7 @@ function App() {
             id: tranche.id,
             index: index + 1,
             balance: tranche.amount,
+            repaymentPrincipal: tranche.repaymentPrincipal,
             effectiveBalance: mathTranches[index]?.amount ?? tranche.amount,
             rate: tranche.rate,
             termYears: tranche.termYears,
@@ -726,6 +784,7 @@ function App() {
       }),
     [
       marketRates.snapshotId,
+      isExistingLoan,
       loanAmount,
       loanStructure,
       primaryFrequency,
@@ -863,14 +922,11 @@ function App() {
 
       <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
         <LoanBalanceStep
+          hasExistingLoan={hasExistingLoan}
           isSplitLoan={isSplitLoan}
-          loanAmount={loanAmount}
-          loanBalance={loanBalance}
           loanStructure={loanStructure}
           displayedTranches={displayedTranches}
           normalizedTranches={normalizedTranches}
-          trancheTotal={trancheTotal}
-          splitMatches={splitMatches}
           dispatch={dispatch}
           updateTranche={updateTranche}
           addTranche={addTranche}
@@ -969,7 +1025,7 @@ function App() {
 
             <MarketRateComparisonStep
               bankOptions={marketBankOptions}
-              marketRateRows={marketRateRows}
+              marketRateRows={averageMarketRateRows}
               marketRates={marketRates}
               selectedBankId={selectedMarketBankId}
               setSelectedBankId={setSelectedMarketBankId}
@@ -1005,6 +1061,17 @@ function App() {
               summaryContent={summaryContent}
               summaryPayloadBase={summaryPayloadBase}
               serializedState={serializedMortgageState}
+              loanAmount={loanAmount}
+              currentRepayment={summary.repayment}
+              cashAfterMortgage={netCash.remainingCash}
+              extraPayment={toPositive(extraPayment)}
+              monthlyCost={paymentToAnnual(summary.repayment, primaryFrequency) / 12}
+              dtiRatio={dtiRatio}
+              repaymentToIncome={repaymentToIncome}
+              marketRateRows={marketRateRows}
+              trancheForecasts={trancheForecasts}
+              averageFixedRates={averageFixedRates}
+              variableOnly={variableOnly}
               onSubmitLead={handleLeadCapture}
               onPdfRequested={handlePdfGeneration}
               onSummaryExported={handleSummaryExported}

@@ -1,6 +1,6 @@
 export function getInitialMortgageFormState() {
   return {
-    loanBalance: "",
+    hasExistingLoan: "yes",
     loanStructure: "single",
     salaryIncome: "",
     extraPayment: "",
@@ -20,6 +20,7 @@ export function createTranche(overrides = {}) {
   return {
     id: createTrancheId(),
     amount: "",
+    originalLoanAmount: "",
     rate: "",
     termYears: "30",
     paysMoreThanMinimum: "no",
@@ -74,8 +75,7 @@ export function mortgageFormReducer(state, action) {
     case "ADD_TRANCHE": {
       const existingTranches = state.tranches.map((tranche) => ({ ...tranche }));
 
-      // State preservation fix: appending a loan part never rewrites existing user inputs.
-      // The total loan balance remains only the headline total; split amounts are explicit.
+      // State preservation fix: appending a loan tranche never rewrites existing user inputs.
       return {
         ...state,
         loanStructure: "split",

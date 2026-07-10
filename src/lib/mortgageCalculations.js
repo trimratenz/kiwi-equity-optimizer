@@ -1,6 +1,6 @@
 export const FREQUENCY_CONFIG = {
-  Weekly: { periodsPerYear: 52, label: "week", short: "wk" },
-  Fortnightly: { periodsPerYear: 26, label: "fortnight", short: "fn" },
+  Weekly: { periodsPerYear: 365 / 7, label: "week", short: "wk" },
+  Fortnightly: { periodsPerYear: 365 / 14, label: "fortnight", short: "fn" },
   Monthly: { periodsPerYear: 12, label: "month", short: "mo" }
 };
 
@@ -26,6 +26,13 @@ export function periodsForMonths(months, frequency = "Monthly") {
   return Math.ceil((Math.max(Number(months) || 0, 0) / 12) * periodsPerYear(frequency));
 }
 
+function periodsForLoanTerm(years, frequency = "Monthly") {
+  const safeYears = Math.max(Number(years) || 1, 1);
+  const paymentCount = periodsPerYear(frequency);
+
+  return frequency === "Monthly" ? Math.round(safeYears * paymentCount) : Math.floor(safeYears * paymentCount);
+}
+
 function normalizedRate(annualInterestRate) {
   return (Number(annualInterestRate) || 0) / 100;
 }
@@ -42,7 +49,7 @@ export function calculateMinimumRepayment({
   const safePrincipal = safeMoney(loanBalance ?? principal);
   const safeYears = Math.max(Number(remainingYears ?? years) || 1, 1);
   const paymentCount = periodsPerYear(frequency);
-  const numberOfPayments = safeYears * paymentCount;
+  const numberOfPayments = periodsForLoanTerm(safeYears, frequency);
   const periodicRate = normalizedRate(annualInterestRate ?? annualRate) / paymentCount;
 
   if (periodicRate === 0) return safePrincipal / numberOfPayments;
@@ -125,7 +132,7 @@ export function amortizeLoanPart({
   const basePayment = usesRepaymentOverride ? repaymentOverride : minimumPayment;
   const extraPerPeriod = safeMoney(extraPayment);
   const interestOnlyPeriods = Math.round(Math.max(Number(interestOnlyYears) || 0, 0) * paymentCount);
-  const scheduledPeriods = usesRepaymentOverride ? Math.ceil(100 * paymentCount) : Math.ceil(safeYears * paymentCount);
+  const scheduledPeriods = usesRepaymentOverride ? Math.ceil(100 * paymentCount) : periodsForLoanTerm(safeYears, safeFrequencyName);
   const periodLimit = Number.isFinite(maxPeriods) ? Math.max(Math.round(maxPeriods), 0) : scheduledPeriods;
   const rows = [];
   let balance = safePrincipal;
@@ -147,9 +154,13 @@ export function amortizeLoanPart({
     totalInterest += interest;
     yearInterest += interest;
 
-    if ((period + 1) % paymentCount === 0 || balance <= 1e-8 || period + 1 === periodLimit) {
+    const completedYears = Math.floor((period + 1) / paymentCount);
+    const completedYearsBeforePayment = Math.floor(period / paymentCount);
+    const isYearEnd = completedYears > completedYearsBeforePayment;
+
+    if (isYearEnd || balance <= 1e-8 || period + 1 === periodLimit) {
       rows.push({
-        year: Math.ceil((period + 1) / paymentCount),
+        year: balance <= 1e-8 ? Math.min(Math.ceil(safeYears), Math.ceil((period + 1) / paymentCount)) : completedYears,
         debt: balance,
         annualInterest: yearInterest,
         totalInterest

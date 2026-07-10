@@ -200,10 +200,11 @@ export function yearsAndMonths(periods, frequency = "Monthly") {
 function normaliseLoanPart(part, fallbackFrequency = "Monthly") {
   const frequency = safeFrequency(part?.frequency || fallbackFrequency);
   const principal = safeMoney(part?.amount ?? part?.principal ?? part?.balance);
+  const repaymentPrincipal = safeMoney(part?.repaymentPrincipal ?? principal);
   const rate = Number(part?.rate ?? part?.annualRate) || 0;
   const termYears = Math.max(Number(part?.termYears ?? part?.years) || 1, 1);
   const repayment = buildLoanPartRepaymentDetails({
-    principal,
+    principal: repaymentPrincipal,
     annualRate: rate,
     years: termYears,
     frequency,
@@ -214,6 +215,7 @@ function normaliseLoanPart(part, fallbackFrequency = "Monthly") {
     ...part,
     amount: principal,
     principal,
+    repaymentPrincipal,
     rate,
     termYears,
     repaymentAmount: repayment.effectiveCurrentRepaymentExact,

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { ClipboardCheck, Send } from "lucide-react";
+import { currency, percent } from "../financialModel";
 import { emptyConsentFields, emptyContactFields } from "../summaryPayload.js";
 import { LEAD_CONSENT_TEXT, PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from "../privacy.js";
 
@@ -32,14 +33,50 @@ function validateLeadForm(values) {
   return errors;
 }
 
-export function ExecutiveSummaryLeadStep({ summaryContent, summaryPayloadBase, onSubmitLead, onSummaryExported }) {
+function repaymentLabel(value, frequency) {
+  return `${currency(value)} / ${String(frequency || "period").toLowerCase()}`;
+}
+
+function forecastRangeLabel(changes, frequency) {
+  const low = Math.min(...changes);
+  const high = Math.max(...changes);
+  const frequencyLabel = String(frequency || "period").toLowerCase();
+
+  if (Math.abs(low) < 0.5 && Math.abs(high) < 0.5) return "Similar to now";
+  if (low >= 0.5) return `${currency(low)} to ${currency(high)} more / ${frequencyLabel}`;
+  if (high <= -0.5) return `${currency(Math.abs(high))} to ${currency(Math.abs(low))} less / ${frequencyLabel}`;
+  return `${currency(Math.abs(low))} less to ${currency(high)} more / ${frequencyLabel}`;
+}
+
+function termLabel(value) {
+  return String(value || "")
+    .replace(/(\d+) yr/g, (_, years) => `${years} ${Number(years) === 1 ? "year" : "years"}`)
+    .replace(/(\d+) mo/g, (_, months) => `${months} months`);
+}
+
+export function ExecutiveSummaryLeadStep({
+  summaryContent,
+  summaryPayloadBase,
+  loanAmount,
+  currentRepayment,
+  cashAfterMortgage,
+  extraPayment,
+  monthlyCost,
+  dtiRatio,
+  repaymentToIncome,
+  marketRateRows,
+  trancheForecasts,
+  averageFixedRates,
+  variableOnly,
+  onSubmitLead,
+  onSummaryExported
+}) {
   const [values, setValues] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [consentTimestamp, setConsentTimestamp] = useState("");
   const [leadFormStarted, setLeadFormStarted] = useState(false);
 
-  const keyTakeaways = useMemo(() => summaryContent.keyTakeaways ?? [], [summaryContent.keyTakeaways]);
   const contact = useMemo(
     () => ({
       ...emptyContactFields(),
@@ -149,9 +186,9 @@ export function ExecutiveSummaryLeadStep({ summaryContent, summaryPayloadBase, o
         </div>
         <div>
           <p className="text-xs font-black uppercase tracking-wide text-[#3A6047]">Home loan summary</p>
-          <h2 className="text-xl font-black text-[#1B2A22] sm:text-2xl">Key takeaways</h2>
+          <h2 className="text-xl font-black text-[#1B2A22] sm:text-2xl">Your summary</h2>
           <p className="mt-1 max-w-3xl text-sm leading-6 text-[#7B756E]">
-            A plain-English wrap-up of the important results from the calculator.
+            Here&apos;s a simple snapshot of your current loan position and how your repayments may change under different rate scenarios.
           </p>
         </div>
       </div>
@@ -163,16 +200,145 @@ export function ExecutiveSummaryLeadStep({ summaryContent, summaryPayloadBase, o
             <h1>Home Loan Summary</h1>
           </div>
 
-          <ul className="grid gap-3 text-sm leading-6 text-[#4F5A52]">
-            {keyTakeaways.map((takeaway) => (
-              <li key={takeaway} className="grid grid-cols-[24px_1fr] gap-3">
-                <span className="mt-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#3A6047] text-xs font-black text-white">
-                  +
-                </span>
-                <span>{takeaway}</span>
-              </li>
-            ))}
-          </ul>
+          <div className="grid gap-5">
+            <section>
+              <h3 className="text-base font-black text-[#1B2A22]">Current position</h3>
+              <ul className="mt-3 grid gap-2 text-sm leading-6 text-[#4F5A52] sm:grid-cols-2">
+                <li><strong>Current loan balance:</strong> {currency(loanAmount)}</li>
+                <li><strong>Current repayment:</strong> {currency(currentRepayment)}</li>
+                <li><strong>Cash after mortgage:</strong> {currency(cashAfterMortgage)}</li>
+                {extraPayment > 0 && <li><strong>Top-up:</strong> {currency(extraPayment)}</li>}
+                <li><strong>Monthly cost:</strong> {currency(monthlyCost)}</li>
+                <li><strong>DTI:</strong> {dtiRatio.toFixed(2)}x</li>
+                <li><strong>Repayment-to-income ratio:</strong> {percent(repaymentToIncome, 1)}</li>
+              </ul>
+              <p className="mt-3 text-xs font-medium leading-5 text-[#7B756E]">
+                These figures are based on the details entered and are estimates only.
+              </p>
+            </section>
+
+            <section>
+              <h3 className="text-base font-black text-[#1B2A22]">
+                {variableOnly ? "Average fixed rates to compare" : "Rate comparison by loan tranche"}
+              </h3>
+              {variableOnly ? (
+                <>
+                  <div className="mt-3 overflow-x-auto rounded-lg border border-[#E2DDD5] bg-white">
+                    <table className="w-full min-w-[520px] text-left text-sm">
+                      <thead className="bg-[#F7F5F0] text-xs uppercase tracking-wide text-[#7B756E]">
+                        <tr><th className="p-3">Fixed term</th><th className="p-3">Average market rate</th></tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#E2DDD5]">
+                        {averageFixedRates.map((rate) => <tr key={rate.term}><td className="p-3 font-bold">{rate.term}</td><td className="p-3">{percent(rate.rate)}</td></tr>)}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="mt-3 text-xs leading-5 text-[#7B756E]">
+                    Because your loan is variable, you may be able to compare available fixed-rate options without waiting for a fixed term to end. Check with your lender.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="mt-1 text-sm leading-6 text-[#7B756E]">
+                    This compares your current repayment with an estimated repayment using the average market rate for the same fixed term.
+                  </p>
+                  <div className="mt-3 overflow-x-auto rounded-lg border border-[#E2DDD5] bg-white">
+                    <table className="w-full min-w-[760px] text-left text-sm">
+                      <thead className="bg-[#F7F5F0] text-xs uppercase tracking-wide text-[#7B756E]">
+                        <tr>
+                          <th className="p-3">Tranche</th><th className="p-3">Your rate</th><th className="p-3">Market rate</th><th className="p-3">Your repayment</th><th className="p-3">Market repayment</th><th className="p-3">Compared with market</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#E2DDD5] text-[#1B2A22]">
+                        {marketRateRows.map((row) => {
+                          const hasAverageRate = Number.isFinite(row.marketRate);
+                          const marketRateNote = !hasAverageRate || Math.abs(row.difference) < 0.05
+                            ? ""
+                            : `${percent(Math.abs(row.difference))} ${row.difference > 0 ? "below" : "above"} your rate`;
+                          const impactLabel = !Number.isFinite(row.repaymentDifference)
+                            ? "Not available"
+                            : Math.abs(row.repaymentDifference) < 0.5
+                              ? "Similar to market"
+                              : `You pay about ${currency(Math.abs(row.repaymentDifference))} ${row.repaymentDifference > 0 ? "less" : "more"} / ${String(row.frequency).toLowerCase()}`;
+                          const impactTone = !Number.isFinite(row.repaymentDifference) || Math.abs(row.repaymentDifference) < 0.5
+                            ? "text-[#7B756E]"
+                            : row.repaymentDifference > 0
+                              ? "text-[#3A6047]"
+                              : "text-[#C86A53]";
+                          return <tr key={row.id}>
+                            <td className="p-3"><p className="font-black">Tranche {row.index}</p><p className="text-xs font-medium text-[#7B756E]">Fixed {termLabel(row.fixedTermLabel)}</p></td>
+                            <td className="p-3">{percent(row.currentRate)}</td>
+                            <td className="p-3"><p>{hasAverageRate ? percent(row.marketRate) : "Not available"}</p>{marketRateNote && <p className="mt-1 text-xs font-medium text-[#7B756E]">{marketRateNote}</p>}</td>
+                            <td className="p-3">{repaymentLabel(row.currentRepayment, row.frequency)}</td>
+                            <td className="p-3">{Number.isFinite(row.marketRepayment) ? repaymentLabel(row.marketRepayment, row.frequency) : "Not available"}</td>
+                            <td className={`p-3 font-bold ${impactTone}`}>{impactLabel}</td>
+                          </tr>;
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="mt-3 text-xs leading-5 text-[#7B756E]">
+                    Market comparisons are estimates only and do not include break fees, cashback clawbacks, or lender-specific pricing.
+                  </p>
+                </>
+              )}
+            </section>
+
+            <section>
+              <h3 className="text-base font-black text-[#1B2A22]">OCR forecast repayment scenarios</h3>
+              <p className="mt-1 text-sm leading-6 text-[#7B756E]">These scenarios show how each tranche&apos;s repayment may change under optimistic, base, and conservative rate assumptions.</p>
+              <p className="mt-1 text-xs font-medium leading-5 text-[#7B756E]">Optimistic means a lower-rate scenario. Conservative means a higher-rate scenario.</p>
+              <div className="mt-3 overflow-x-auto rounded-lg border border-[#E2DDD5] bg-white">
+                <table className="w-full min-w-[900px] text-left text-sm">
+                  <thead className="bg-[#F7F5F0] text-xs uppercase tracking-wide text-[#7B756E]">
+                    <tr><th className="p-3">Tranche</th><th className="p-3">Now</th><th className="p-3">Optimistic</th><th className="p-3">Base</th><th className="p-3">Conservative</th><th className="p-3">Change</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E2DDD5] text-[#1B2A22]">
+                    {trancheForecasts.map((row) => {
+                      const optimistic = row.scenarios.find((scenario) => scenario.key === "optimistic");
+                      const base = row.scenarios.find((scenario) => scenario.key === "base");
+                      const conservative = row.scenarios.find((scenario) => scenario.key === "conservative");
+                      const changes = row.scenarios.map((scenario) => scenario.repaymentChange);
+                      const scenarioTone = (scenario) =>
+                        !scenario || Math.abs(scenario.repaymentChange) < 0.5
+                          ? "text-[#7B756E]"
+                          : scenario.repaymentChange > 0
+                            ? "text-[#C86A53]"
+                            : "text-[#3A6047]";
+                      const changeTone =
+                        changes.length === 0 || (Math.min(...changes) < -0.5 && Math.max(...changes) > 0.5)
+                          ? "text-[#7B756E]"
+                          : Math.max(...changes) <= -0.5
+                            ? "text-[#3A6047]"
+                            : Math.min(...changes) >= 0.5
+                              ? "text-[#C86A53]"
+                              : "text-[#7B756E]";
+                      return <tr key={row.id}>
+                        <td className="p-3"><p className="font-black">Tranche {row.index}</p><p className="text-xs font-medium text-[#7B756E]">Rolling over {row.refixPointLabel === "now" ? "now" : `in ${termLabel(row.refixPointLabel)}`}</p><p className="mt-1 text-xs font-medium text-[#7B756E]">{row.fixedTermEnd} · OCR {percent(row.forecastOcr)}</p></td>
+                        <td className="p-3">{repaymentLabel(row.currentRepayment, row.frequency)}</td>
+                        <td className={`p-3 ${scenarioTone(optimistic)}`}>{optimistic ? `${repaymentLabel(optimistic.repayment, row.frequency)} (${percent(optimistic.forecastMortgageRate)})` : "Not available"}</td>
+                        <td className={`p-3 ${scenarioTone(base)}`}>{base ? `${repaymentLabel(base.repayment, row.frequency)} (${percent(base.forecastMortgageRate)})` : "Not available"}</td>
+                        <td className={`p-3 ${scenarioTone(conservative)}`}>{conservative ? `${repaymentLabel(conservative.repayment, row.frequency)} (${percent(conservative.forecastMortgageRate)})` : "Not available"}</td>
+                        <td className={`p-3 font-bold ${changeTone}`}>{changes.length ? forecastRangeLabel(changes, row.frequency) : "Not available"}</td>
+                      </tr>;
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-3 text-xs leading-5 text-[#7B756E]">
+                These scenarios estimate how repayments may change if rates move broadly in line with the OCR forecast assumptions. They are not predictions or lender offers.
+              </p>
+              <p className="mt-2 text-xs leading-5 text-[#7B756E]">Change compares each scenario with your current repayment.</p>
+              {trancheForecasts.some((row) => row.scenarios.length > 0 && row.scenarios.every((scenario) => scenario.repayment > row.currentRepayment + 0.5)) && (
+                <p className="mt-2 text-xs font-medium leading-5 text-[#7B756E]">
+                  Your current rate is below the forecast scenario rates, so these scenarios show higher repayments than your current repayment.
+                </p>
+              )}
+              <p className="mt-2 text-xs leading-5 text-[#7B756E]">
+                Forecast repayments use the current market rate for the selected fixed term, adjusted for the OCR forecast movement with scenario-specific pass-through and rate buffers. Actual lender rates may move differently and may include margins, discounts, fees, or special offers.
+              </p>
+            </section>
+          </div>
 
           <p className="mt-4 rounded-lg bg-[#F4FAF6] p-3 text-sm font-semibold leading-6 text-[#3A6047]">
             {summaryContent.disclaimer}

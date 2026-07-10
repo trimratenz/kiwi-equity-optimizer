@@ -1,50 +1,61 @@
 import assert from "node:assert/strict";
-import {
-  getInitialMortgageFormState,
-  mortgageFormReducer
-} from "../src/mortgageFormState.js";
+import { readFileSync } from "node:fs";
+import { getInitialMortgageFormState, mortgageFormReducer } from "../src/mortgageFormState.js";
 
 function reduce(state, action) {
   return mortgageFormReducer(state, action);
 }
 
-let state = getInitialMortgageFormState();
-const firstId = state.tranches[0].id;
+function updateTranche(state, id, field, value) {
+  return reduce(state, { type: "UPDATE_TRANCHE", id, field, value, decimal: true });
+}
 
-state = reduce(state, { type: "SET_FIELD", field: "loanBalance", value: "600000", decimal: true });
-state = reduce(state, { type: "SET_FIELD", field: "salaryIncome", value: "5000", decimal: true });
-assert.equal(state.tranches[0].termYears, "30", "Default loan term should be 30 years");
-state = reduce(state, { type: "UPDATE_TRANCHE", id: firstId, field: "rate", value: "5.75", decimal: true });
-state = reduce(state, { type: "UPDATE_TRANCHE", id: firstId, field: "termYears", value: "20", decimal: true });
-state = reduce(state, { type: "UPDATE_TRANCHE", id: firstId, field: "repaymentAmount", value: "989.55", decimal: true });
-state = reduce(state, { type: "UPDATE_TRANCHE", id: firstId, field: "type", value: "Variable" });
-state = reduce(state, { type: "UPDATE_TRANCHE", id: firstId, field: "frequency", value: "Fortnightly" });
+let existingSingle = getInitialMortgageFormState();
+const existingSingleId = existingSingle.tranches[0].id;
 
-const beforeAdd = state;
-state = reduce(state, { type: "ADD_TRANCHE" });
+assert.equal(existingSingle.hasExistingLoan, "yes", "Existing loan should be the default flow");
+existingSingle = updateTranche(existingSingle, existingSingleId, "amount", "600000");
+existingSingle = updateTranche(existingSingle, existingSingleId, "originalLoanAmount", "700000");
+assert.equal(existingSingle.loanStructure, "single", "Existing one-loan flow should remain single");
+assert.equal(existingSingle.tranches[0].amount, "600000", "Existing one-loan flow stores the current balance on the tranche");
+assert.equal(existingSingle.tranches[0].originalLoanAmount, "700000", "Existing one-loan flow stores the original amount on the tranche");
 
-assert.notEqual(state, beforeAdd, "ADD_TRANCHE must return a new state object");
-assert.equal(state.loanStructure, "split", "Adding a tranche should put the form into split-loan mode");
-assert.equal(state.tranches.length, 2, "ADD_TRANCHE should append one tranche");
-assert.equal(state.tranches[0].id, firstId, "Existing tranche key/id should be preserved");
-assert.equal(state.tranches[0].amount, "", "Existing tranche amount should not be auto-filled from total balance");
-assert.equal(state.tranches[0].rate, "5.75", "Existing interest rate should be preserved");
-assert.equal(state.tranches[0].termYears, "20", "Existing term should be preserved");
-assert.equal(state.tranches[0].repaymentAmount, "989.55", "Existing current repayment should be preserved");
-assert.equal(state.tranches[0].type, "Variable", "Existing loan type should be preserved");
-assert.equal(state.tranches[0].frequency, "Fortnightly", "Existing repayment frequency should be preserved");
-assert.ok(state.tranches[1].id, "New tranche should have a generated id");
-assert.notEqual(state.tranches[1].id, firstId, "New tranche id should be unique");
+let existingSplit = reduce(existingSingle, { type: "ADD_TRANCHE" });
+const existingSplitId = existingSplit.tranches[1].id;
+existingSplit = updateTranche(existingSplit, existingSplitId, "amount", "150000");
+existingSplit = updateTranche(existingSplit, existingSplitId, "originalLoanAmount", "200000");
+assert.equal(existingSplit.loanStructure, "split", "Existing split-loan flow should be split");
+assert.equal(existingSplit.tranches.length, 2, "Existing split-loan flow should have two tranches");
+assert.equal(existingSplit.tranches[0].originalLoanAmount, "700000", "Existing tranche original amount should be preserved");
+assert.equal(existingSplit.tranches[1].originalLoanAmount, "200000", "New existing tranche should store its own original amount");
 
-const afterInvalidDecimal = reduce(state, {
+let newSingle = getInitialMortgageFormState();
+const newSingleId = newSingle.tranches[0].id;
+newSingle = reduce(newSingle, { type: "SET_FIELD", field: "hasExistingLoan", value: "no" });
+newSingle = updateTranche(newSingle, newSingleId, "amount", "600000");
+assert.equal(newSingle.hasExistingLoan, "no", "New-loan flow should be selectable");
+assert.equal(newSingle.loanStructure, "single", "New one-loan flow should remain single");
+assert.equal(newSingle.tranches[0].amount, "600000", "New one-loan flow stores the new loan amount on the tranche");
+
+let newSplit = reduce(newSingle, { type: "ADD_TRANCHE" });
+const newSplitId = newSplit.tranches[1].id;
+newSplit = updateTranche(newSplit, newSplitId, "amount", "150000");
+assert.equal(newSplit.loanStructure, "split", "New split-loan flow should be split");
+assert.equal(newSplit.tranches.length, 2, "New split-loan flow should have two tranches");
+assert.equal(newSplit.tranches[1].amount, "150000", "New split-loan flow stores each new loan amount on its tranche");
+
+const beforeInvalidDecimal = newSplit;
+const afterInvalidDecimal = reduce(newSplit, {
   type: "UPDATE_TRANCHE",
-  id: firstId,
+  id: newSingleId,
   field: "rate",
   value: "5.7.2",
   decimal: true
 });
 
-assert.equal(afterInvalidDecimal, state, "Invalid decimal input should be ignored without mutating state");
-assert.equal(afterInvalidDecimal.tranches[0].rate, "5.75", "Invalid decimal input should not overwrite rate");
+assert.equal(afterInvalidDecimal, beforeInvalidDecimal, "Invalid decimal input should be ignored without mutating state");
+
+const stepOneSource = readFileSync(new URL("../src/components/LoanBalanceStep.jsx", import.meta.url), "utf8");
+assert.doesNotMatch(stepOneSource, /loan part/i, "Step 1 should use loan tranche wording");
 
 console.log("Form state smoke test passed");

@@ -178,18 +178,18 @@ export function RepaymentBreakdownTable({
 }) {
   const totalRepaymentLabel = repaymentFrequencyLabel || primaryFrequency;
   const repaymentPerSelectedPeriod = summary.repayment;
+  const totalBalance = tranchesWithPayments.reduce((sum, tranche) => sum + (Number(tranche.amount) || 0), 0);
 
   return (
     <div className="grid gap-3">
       <div className="overflow-hidden rounded-xl border border-[#E2DDD5] bg-white shadow-[0_12px_34px_rgba(27,42,34,0.06)]">
         <table className="w-full table-fixed text-left text-xs sm:text-sm">
           <colgroup>
-            <col className="w-[15%]" />
-            <col className="w-[15%]" />
-            <col className="w-[23%]" />
-            <col className="w-[14%]" />
-            <col className="w-[16%]" />
             <col className="w-[17%]" />
+            <col className="w-[17%]" />
+            <col className="w-[26%]" />
+            <col className="w-[18%]" />
+            <col className="w-[22%]" />
           </colgroup>
           <thead className="bg-[#F7F5F0] text-[10px] uppercase tracking-wide text-[#7B756E] sm:text-xs">
             <tr>
@@ -197,7 +197,6 @@ export function RepaymentBreakdownTable({
               <th className="px-2 py-3 sm:px-3">Type</th>
               <th className="px-2 py-3 sm:px-3">Balance</th>
               <th className="px-2 py-3 sm:px-3">Rate</th>
-              <th className="px-2 py-3 sm:px-3">Freq.</th>
               <th className="px-2 py-3 sm:px-3">Repay.</th>
             </tr>
           </thead>
@@ -208,7 +207,6 @@ export function RepaymentBreakdownTable({
                 <td className="px-2 py-3 sm:px-3">{tranche.type}</td>
                 <td className="break-words px-2 py-3 sm:px-3">{currency(tranche.amount)}</td>
                 <td className="px-2 py-3 sm:px-3">{percent(tranche.rate)}</td>
-                <td className="px-2 py-3 sm:px-3">{tranche.frequency}</td>
                 <td className="break-words px-2 py-3 font-bold text-[#3A6047] sm:px-3">
                   {currency(tranche.repayment)}
                 </td>
@@ -217,7 +215,11 @@ export function RepaymentBreakdownTable({
           </tbody>
           <tfoot className="border-t border-[#E2DDD5] bg-[#F7F5F0] text-[#1B2A22]">
             <tr>
-              <td className="px-2 py-3 font-black sm:px-3" colSpan={5}>
+              <td className="px-2 py-3 font-black sm:px-3" colSpan={2}>
+                Total balance
+              </td>
+              <td className="break-words px-2 py-3 font-black sm:px-3">{currency(totalBalance)}</td>
+              <td className="px-2 py-3 font-black sm:px-3">
                 {totalRepaymentLabel} Repayment
               </td>
               <td className="break-words px-2 py-3 font-black text-[#3A6047] sm:px-3">
