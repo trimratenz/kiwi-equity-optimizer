@@ -104,8 +104,14 @@ export function LoanBalanceStep({
                   {isExistingLoan && (
                     <Field
                       label="Original home loan amount"
-                      hint="Use the amount your repayments were originally based on."
-                      error={normalized?.repaymentPrincipal <= 0 ? "Enter an original home loan amount greater than $0." : undefined}
+                      hint="Enter the original loan amount from your bank app or loan agreement—the amount your repayments were originally based on."
+                      error={
+                        normalized?.originalAmountBelowCurrent
+                          ? "Original loan amount cannot be less than your current balance."
+                          : normalized?.repaymentPrincipal <= 0
+                            ? "Enter an original home loan amount greater than $0."
+                            : undefined
+                      }
                     >
                       <NumberInput
                         value={tranche.originalLoanAmount}

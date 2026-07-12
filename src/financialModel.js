@@ -853,7 +853,7 @@ export function buildRefixScenarioView({
     selectedForecastRow,
     selectedForecastScenario,
     selectedForecastTermMonths: selectedForecastRow?.months ?? selectedTermMonths,
-    scenarioLabel: selectedTranche?.index ? `Loan part ${selectedTranche.index}` : "Loan details"
+    scenarioLabel: selectedTranche?.index ? `Loan Tranche ${selectedTranche.index}` : "Loan details"
   };
 }
 
@@ -897,14 +897,14 @@ export function buildPlainEnglishSummary({
       ? marketRateRows
           .map((row) => {
             const monthlyImpact = paymentToAnnual(row.repaymentDifference, row.frequency) / 12;
-            return `Loan part ${row.index}: current rate ${percent(row.currentRate)} compared with ${percent(
+            return `Loan Tranche ${row.index}: current rate ${percent(row.currentRate)} compared with ${percent(
               row.marketRate
             )} from ${row.comparisonSource || "Five-bank average"} for ${row.marketTerm}; difference ${row.difference >= 0 ? "+" : ""}${percent(
               row.difference
             )}; estimated monthly impact ${monthlyImpact >= 0 ? "+" : ""}${currency(monthlyImpact)}.`;
           })
           .join(" ")
-      : "Market comparison is unavailable until loan-part and rate data are complete.";
+      : "Market comparison is unavailable until Loan Tranche and rate data are complete.";
   const strongestMarketRow = marketRateRows.reduce((best, row) => {
     if (!best) return row;
     return Math.abs(row.difference) > Math.abs(best.difference) ? row : best;
@@ -914,7 +914,7 @@ export function buildPlainEnglishSummary({
     : 0;
 
   const structureSentence = `${currency(totalDebt)} is shown across ${tranches.length} ${
-    tranches.length === 1 ? "loan part" : "loan parts"
+    tranches.length === 1 ? "Loan Tranche" : "Loan Tranches"
   } with a weighted average rate of ${percent(weightedRate)}.`;
   const minimumRepaymentAnnual = tranches.reduce((sum, tranche) => {
     const minimum =
@@ -927,7 +927,7 @@ export function buildPlainEnglishSummary({
   const repaymentSourceSentence = hasRepaymentOverride
     ? `Current repayments: Your calculated minimum repayment is ${currency(
         minimumRepayment
-      )} per ${frequencyLabel}. You entered higher current repayment amounts for at least one loan part, so the calculator uses ${currency(
+      )} per ${frequencyLabel}. You entered higher current repayment amounts for at least one Loan Tranche, so the calculator uses ${currency(
         summary.repayment
       )} per ${frequencyLabel} in the scenarios below.`
     : `Current repayments: Your calculated minimum repayment is ${currency(
@@ -939,7 +939,7 @@ export function buildPlainEnglishSummary({
   const cashFlowSentence = `Cash after the standard mortgage repayment is ${currency(
     monthlyCashAfterRepayment
   )} per month. DTI is an estimate of ${dtiRatio.toFixed(2)}x from the debt and income entered.`;
-  const refixSentence = `Selected re-fix scenario: Loan part ${selectedForecastTranche?.index ?? 1}, ${selectedForecastRow?.label ?? "1 year"} fixed in ${
+  const refixSentence = `Selected re-fix scenario: Loan Tranche ${selectedForecastTranche?.index ?? 1}, ${selectedForecastRow?.label ?? "1 year"} fixed in ${
     selectedForecastRow?.refixPointLabel ?? "now"
   }. It uses an OCR path from ${percent(currentOcr)} to ${percent(forecastOcr)}, a forecast mortgage rate of ${percent(
     selectedForecastScenario?.forecastMortgageRate ?? selectedForecastRow?.forecastMortgageRate ?? 0
@@ -997,7 +997,7 @@ export function buildPlainEnglishSummary({
   const overviewRows = [
     {
       label: "Loan setup",
-      value: `${tranches.length} ${tranches.length === 1 ? "loan part" : "loan parts"}`,
+      value: `${tranches.length} ${tranches.length === 1 ? "Loan Tranche" : "Loan Tranches"}`,
       detail: `${currency(totalDebt)} at ${percent(weightedRate)} avg`
     },
     {
@@ -1053,7 +1053,7 @@ export function buildPlainEnglishSummary({
     .join("; ");
   const inputRows = [
     {
-      label: "Loan parts",
+      label: "Loan Tranches",
       value: `${tranches.length} ${tranches.length === 1 ? "part" : "parts"}`,
       detail: loanPartSummary
     },
@@ -1168,7 +1168,7 @@ export function buildPlainEnglishSummary({
   const baseScenarioCard = scenarioCards.find((scenario) => scenario.key === "base") ?? scenarioCards[0];
   const keyTakeaways = [
     `${currency(totalDebt)} is split across ${tranches.length} ${
-      tranches.length === 1 ? "loan part" : "loan parts"
+      tranches.length === 1 ? "Loan Tranche" : "Loan Tranches"
     }, with a weighted average rate of ${percent(weightedRate)}.`,
     `Your current repayment is about ${currency(monthlyRepayment)} per month, or ${currency(
       summary.repayment
@@ -1182,10 +1182,10 @@ export function buildPlainEnglishSummary({
       ? `Compared with the selected market view, the total estimated difference is ${
           marketTotalMonthlyImpact >= 0 ? "+" : ""
         }${currency(marketTotalMonthlyImpact)} per month.`
-      : "Market comparison will appear once loan-part and rate data are complete.",
+      : "Market comparison will appear once Loan Tranche and rate data are complete.",
     baseScenarioCard
       ? `Base re-fix scenario: if all active parts moved to a ${scenarioTermLabel} fixed rate, the combined repayment is estimated at ${baseScenarioCard.projectedRepayment} per ${frequencyShort}, a change of ${baseScenarioCard.deltaLabel}.`
-      : "Re-fix scenarios will appear once loan-part data are complete."
+      : "Re-fix scenarios will appear once Loan Tranche data are complete."
   ];
 
   return {

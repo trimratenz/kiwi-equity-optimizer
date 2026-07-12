@@ -43,8 +43,7 @@ import {
   evaluateLatestMpsWarnings
 } from "./snapshotLayer.js";
 import { buildSummaryPayload, monthlyEquivalent } from "./summaryPayload.js";
-
-const FORM_STORAGE_KEY = "trimratenz-form";
+import { LegalPage } from "./LegalPage.jsx";
 
 function displayDate(date) {
   if (!date) return "";
@@ -56,43 +55,22 @@ function displayDate(date) {
   }).format(new Date(`${date}T00:00:00Z`));
 }
 
-function getStoredMortgageFormState() {
-  const initialState = getInitialMortgageFormState();
-
+function getFreshMortgageFormState() {
   try {
-    const stored = window.localStorage.getItem(FORM_STORAGE_KEY);
-    if (!stored) return initialState;
-
-    const parsed = JSON.parse(stored);
-    const storedTranches = Array.isArray(parsed.tranches) && parsed.tranches.length > 0 ? parsed.tranches : initialState.tranches;
-    const migratedTranches = storedTranches.map((tranche, index) =>
-      index === 0
-        ? {
-            ...tranche,
-            amount: tranche.amount || parsed.loanBalance || "",
-            originalLoanAmount: tranche.originalLoanAmount || parsed.originalLoanAmount || ""
-          }
-        : tranche
-    );
-
-    return {
-      ...initialState,
-      ...parsed,
-      extraPayment: parsed.extraPayment === "100" ? "" : parsed.extraPayment ?? initialState.extraPayment,
-      outgoingCosts: parsed.outgoingCosts ?? initialState.outgoingCosts,
-      tranches: migratedTranches
-    };
+    window.localStorage.removeItem("trimratenz-form");
   } catch {
-    return initialState;
+    // Storage may be unavailable; the calculator still starts clean.
   }
+  return getInitialMortgageFormState();
 }
 
 function App() {
-  const [formState, dispatch] = useReducer(mortgageFormReducer, undefined, getStoredMortgageFormState);
+  const [formState, dispatch] = useReducer(mortgageFormReducer, undefined, getFreshMortgageFormState);
   const [selectedForecastTrancheId, setSelectedForecastTrancheId] = useState("");
   const [selectedForecastTermMonths, setSelectedForecastTermMonths] = useState(12);
   const [selectedMarketBankId, setSelectedMarketBankId] = useState("");
   const [selectedSummaryScope, setSelectedSummaryScope] = useState("total");
+  const [resetVersion, setResetVersion] = useState(0);
   const trackedEvents = useRef(new Set());
   const [marketRates, setMarketRates] = useState({
     rates: MARKET_RATE_SNAPSHOT.rates,
@@ -108,10 +86,6 @@ function App() {
     error: ""
   });
   const { hasExistingLoan, loanStructure, salaryIncome, extraPayment, outgoingCosts, interestOnlyYears, tranches } = formState;
-
-  useEffect(() => {
-    window.localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(formState));
-  }, [formState]);
 
   useEffect(() => {
     trackOnce(trackedEvents, "page_view");
@@ -202,6 +176,7 @@ function App() {
           frequency,
           userCurrentRepayment: usesActualRepayment ? tranche.repaymentAmount : ""
         });
+        const originalAmountBelowCurrent = isExistingLoan && repaymentPrincipal > 0 && repaymentPrincipal < amount;
         const fixedTermMonths = tranche.type === "Fixed" ? Math.max(toNumber(tranche.fixedTermMonths || "12"), 0) : 0;
         const fixedMonths = tranche.type === "Fixed" ? Math.max(toNumber(tranche.fixedMonths), 0) : 0;
         const fixedTermTooLong =
@@ -219,6 +194,7 @@ function App() {
           ...tranche,
           amount,
           repaymentPrincipal,
+          originalAmountBelowCurrent,
           rate,
           hasInterestRate: String(tranche.rate ?? "").trim() !== "",
           termYears,
@@ -253,6 +229,7 @@ function App() {
     (tranche) =>
       tranche.amount > 0 &&
       (!isExistingLoan || tranche.repaymentPrincipal > 0) &&
+      !tranche.originalAmountBelowCurrent &&
       tranche.hasInterestRate &&
       tranche.rate >= 0 &&
       tranche.rate <= 15 &&
@@ -268,16 +245,17 @@ function App() {
   const loan = useMemo(() => weightedLoanSnapshot(mathTranches, "Monthly"), [mathTranches]);
   const modelRate = loan.weightedRate || 0;
   const modelYears = Math.max(1, Math.round(loan.weightedTerm || 30));
-  const primaryFrequency = normalizedTranches[0]?.frequency || "Monthly";
+  const selectedFrequency = normalizedTranches[0]?.frequency || "Monthly";
   const repaymentFrequencies = useMemo(
     () => [...new Set(normalizedTranches.map((tranche) => tranche.frequency).filter(Boolean))],
     [normalizedTranches]
   );
   const hasMixedRepaymentFrequencies = repaymentFrequencies.length > 1;
+  const primaryFrequency = hasMixedRepaymentFrequencies && repaymentFrequencies.includes("Monthly") ? "Monthly" : selectedFrequency;
   const repaymentFrequencyLabel = hasMixedRepaymentFrequencies ? `${primaryFrequency} Equivalent` : primaryFrequency;
   const repaymentFrequencyNote = hasMixedRepaymentFrequencies
-    ? `Annualised from ${repaymentFrequencies.join(" + ")} loan-part repayments`
-    : `Summed loan-part schedules; weighted rate ${percent(modelRate)}`;
+    ? `Annualised from ${repaymentFrequencies.join(" + ")} loan tranche repayments`
+    : `Summed loan tranche schedules; weighted rate ${percent(modelRate)}`;
   const summary = useMemo(
     () =>
       summarizeMortgage({
@@ -363,19 +341,19 @@ function App() {
 
       return {
         title: "Total mortgage",
-        description: `${forecastTranches.length} ${forecastTranches.length === 1 ? "loan part" : "loan parts"} combined`,
+        description: `${forecastTranches.length} ${forecastTranches.length === 1 ? "Loan Tranche" : "Loan Tranches"} combined`,
         repaymentLabel: `${repaymentFrequencyLabel} Repayment`,
         repaymentValue: currency(summary.repayment),
         repaymentSub: repaymentFrequencyNote,
         principalLabel: hasFixedEndPayments ? "Remaining Principal" : "Current Balance",
         principalValue: hasFixedEndPayments ? currency(remainingFixedPayments.principal) : currency(effectiveLoan),
         principalSub: hasFixedEndPayments
-          ? `${percent(principalShare, 0)} principal before fixed terms end`
+          ? `${percent(principalShare, 0)} of payments go toward principal`
           : "Variable balance available to compare",
         interestLabel: hasFixedEndPayments ? "Remaining Interest" : "Current Rate",
         interestValue: hasFixedEndPayments ? currency(remainingFixedPayments.interest) : percent(modelRate),
         interestSub: hasFixedEndPayments
-          ? `${percent(interestShare, 0)} interest before fixed terms end`
+          ? `${percent(interestShare, 0)} of payments go toward interest`
           : "Weighted current variable rate",
         totalLabel: hasFixedEndPayments ? "Total P&I to Fixed End" : "Fixing Status",
         totalValue: hasFixedEndPayments ? currency(remainingFixedPayments.total) : "Ready now",
@@ -402,24 +380,24 @@ function App() {
         : "Variable rate | No fixed term end date";
 
     return {
-      title: `Loan part ${tranche?.index ?? 1}`,
+      title: `Loan Tranche ${tranche?.index ?? 1}`,
       description: `${currency(tranche?.amount ?? 0)} at ${percent(tranche?.rate ?? 0)} | ${fixedTermSummary}`,
       repaymentLabel: `${tranche?.frequency ?? primaryFrequency} Repayment`,
       repaymentValue: currency(paymentRow?.repayment ?? 0),
-      repaymentSub: `${tranche?.type ?? "Loan part"}; ${tranche?.termYears ?? modelYears} yr term`,
+      repaymentSub: `${tranche?.type ?? "Loan Tranche"}; ${tranche?.termYears ?? modelYears} yr term`,
       principalLabel: isVariable ? "Current Balance" : "Remaining Principal",
       principalValue: isVariable ? currency(tranche?.amount ?? 0) : currency(principal),
       principalSub: isVariable
         ? "Variable balance available to compare"
         : total > 0
-          ? `${percent(principalShare, 0)} principal before fixed term ends`
+          ? `${percent(principalShare, 0)} of payments go toward principal`
           : "No fixed-term period selected",
       interestLabel: isVariable ? "Current Rate" : "Remaining Interest",
       interestValue: isVariable ? percent(tranche?.rate ?? 0) : currency(interest),
       interestSub: isVariable
         ? "Current floating or variable rate"
         : total > 0
-          ? `${percent(interestShare, 0)} interest before fixed term ends`
+          ? `${percent(interestShare, 0)} of payments go toward interest`
           : "No fixed-term interest window",
       totalLabel: isVariable ? "Fixing Status" : "Total P&I to Fixed End",
       totalValue: isVariable ? "Ready now" : currency(total),
@@ -545,6 +523,7 @@ function App() {
           id: tranche.id,
           index: tranche.index,
           type: tranche.type,
+          currentRate: tranche.rate,
           frequency: tranche.frequency,
           fixedTermLabel: tranche.type === "Fixed" ? monthsLabel(tranche.fixedMonths) : "Variable",
           refixPointLabel: selectedOption?.refixPointLabel ?? "now",
@@ -867,6 +846,11 @@ function App() {
   function resetTool() {
     trackEvent("reset_clicked").catch(() => {});
     dispatch({ type: "RESET" });
+    setSelectedForecastTrancheId("");
+    setSelectedForecastTermMonths(12);
+    setSelectedMarketBankId("");
+    setSelectedSummaryScope("total");
+    setResetVersion((version) => version + 1);
   }
 
   async function handleLeadCapture(payload) {
@@ -1075,6 +1059,7 @@ function App() {
               onSubmitLead={handleLeadCapture}
               onPdfRequested={handlePdfGeneration}
               onSummaryExported={handleSummaryExported}
+              resetVersion={resetVersion}
             />
           </section>
         )}
@@ -1083,12 +1068,23 @@ function App() {
       <footer className="mx-auto max-w-5xl px-4 pb-8 text-xs leading-5 text-[#7B756E] sm:px-6 lg:px-8">
         Educational model only. Mortgage-rate comparisons use market data where available, while forecasts are modelling
         assumptions. Confirm final rates and tax treatment with qualified advisers before making a decision.
+        <span className="mt-2 block">
+          <a className="underline hover:text-[#3A6047]" href="/privacy-policy">Privacy Policy</a>
+          <span className="px-2">·</span>
+          <a className="underline hover:text-[#3A6047]" href="/terms-of-use">Terms of Use</a>
+        </span>
       </footer>
     </main>
   );
 }
 
-createRoot(document.getElementById("root")).render(<App />);
+function Root() {
+  if (window.location.pathname === "/privacy-policy") return <LegalPage type="privacy" />;
+  if (window.location.pathname === "/terms-of-use") return <LegalPage type="terms" />;
+  return <App />;
+}
+
+createRoot(document.getElementById("root")).render(<Root />);
 
 function trackOnce(ref, eventName, payload = {}) {
   if (ref.current.has(eventName)) return;

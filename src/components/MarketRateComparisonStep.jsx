@@ -19,13 +19,18 @@ export function MarketRateComparisonStep({
   const selectedBankName = bankOptions.find((bank) => bank.id === selectedBankId)?.name;
   const matchedRateLabel = selectedBankName ? `${selectedBankName} rate` : "Five-bank average";
   const differenceLabel = selectedBankName ? `${selectedBankName} vs your rate` : "Average vs your rate";
+  const repaymentFrequencies = [...new Set(marketRateRows.map((row) => row.frequency).filter(Boolean))];
+  const impactLabel =
+    repaymentFrequencies.length === 1
+      ? `Estimated ${FREQUENCY_CONFIG[repaymentFrequencies[0]].label} impact`
+      : "Estimated repayment impact";
 
   return (
     <StepShell
       step="Step 3"
       icon={Sparkles}
-      title="How does each loan part compare with the market?"
-      detail={`Each loan part is matched to the closest term from ${marketRates.source}. Last refreshed ${marketRates.lastRefreshed || marketRates.captured}. Leave the bank selector blank for the average, or choose one bank for a direct comparison.`}
+      title="How Does Each Loan Tranche Compare With the Market?"
+      detail={`Each loan tranche is matched to the closest term from ${marketRates.source}. Last refreshed ${marketRates.lastRefreshed || marketRates.captured}. Leave the bank selector blank for the average, or choose one bank for a direct comparison.`}
     >
       <div className="mb-4 grid gap-3 lg:grid-cols-[1fr_260px] lg:items-end">
         <div className="flex flex-wrap items-center gap-2">
@@ -69,7 +74,7 @@ export function MarketRateComparisonStep({
               <th className="p-3">Lowest bank</th>
               <th className="p-3">Your rate</th>
               <th className="p-3">{differenceLabel}</th>
-              <th className="p-3">Estimated monthly impact</th>
+              <th className="p-3">{impactLabel}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#E2DDD5] text-[#1B2A22]">

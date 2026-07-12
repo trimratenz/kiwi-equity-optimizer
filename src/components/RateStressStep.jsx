@@ -34,7 +34,7 @@ export function RateStressStep({
       step="Step 4"
       icon={AlertTriangle}
       title="What could I pay when I re-fix?"
-      detail="Pick the loan part and the new fixed term. TrimRate uses the RBNZ OCR forecast for the date your fixed term ends, then shows three repayment outlooks together."
+      detail="Pick the loan tranche and the new fixed term. TrimRate uses the RBNZ OCR forecast for the date your fixed term ends, then shows three repayment outlooks together."
     >
       <div className="grid gap-5">
         <Segmented
@@ -42,7 +42,7 @@ export function RateStressStep({
           onChange={setSelectedForecastTrancheId}
           options={forecastTranches.map((tranche) => ({
             value: tranche.id,
-            label: forecastTranches.length === 1 ? "Loan details" : `Loan part ${tranche.index}`
+            label: forecastTranches.length === 1 ? "Loan details" : `Loan Tranche ${tranche.index}`
           }))}
         />
 
@@ -73,7 +73,7 @@ export function RateStressStep({
               sub={
                 selectedForecastTranche.type === "Fixed"
                   ? `Current fixed term: ${monthsLabel(selectedForecastTranche.fixedTermMonths)}`
-                  : "Floating or variable loan part"
+                  : "Floating or variable loan tranche"
               }
             />
             <Stat

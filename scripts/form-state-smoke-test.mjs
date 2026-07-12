@@ -44,6 +44,10 @@ assert.equal(newSplit.loanStructure, "split", "New split-loan flow should be spl
 assert.equal(newSplit.tranches.length, 2, "New split-loan flow should have two tranches");
 assert.equal(newSplit.tranches[1].amount, "150000", "New split-loan flow stores each new loan amount on its tranche");
 
+const resetState = reduce(existingSplit, { type: "RESET" });
+assert.equal(resetState.tranches[0].amount, "", "Reset clears tranche amounts");
+assert.equal(resetState.salaryIncome, "", "Reset clears income fields");
+
 const beforeInvalidDecimal = newSplit;
 const afterInvalidDecimal = reduce(newSplit, {
   type: "UPDATE_TRANCHE",
@@ -57,5 +61,17 @@ assert.equal(afterInvalidDecimal, beforeInvalidDecimal, "Invalid decimal input s
 
 const stepOneSource = readFileSync(new URL("../src/components/LoanBalanceStep.jsx", import.meta.url), "utf8");
 assert.doesNotMatch(stepOneSource, /loan part/i, "Step 1 should use loan tranche wording");
+
+const mainSource = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+assert.doesNotMatch(mainSource, /localStorage\.setItem\(.*trimratenz-form/, "Loan form state should not be persisted");
+assert.match(mainSource, /localStorage\.removeItem\("trimratenz-form"\)/, "Legacy stored loan state should be cleared");
+
+const summarySource = readFileSync(new URL("../src/components/ExecutiveSummaryLeadStep.jsx", import.meta.url), "utf8");
+assert.match(summarySource, /Want a second opinion\? A mortgage adviser can review your numbers and help you understand your options\./, "Adviser helper wording should render");
+assert.doesNotMatch(summarySource, /localStorage|sessionStorage/, "Contact form fields should not use browser storage");
+
+const legalSource = readFileSync(new URL("../src/LegalPage.jsx", import.meta.url), "utf8");
+assert.match(legalSource, /Privacy Policy/, "Privacy Policy page should render");
+assert.match(legalSource, /Terms of Use/, "Terms of Use page should render");
 
 console.log("Form state smoke test passed");

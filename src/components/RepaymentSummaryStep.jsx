@@ -21,7 +21,7 @@ export function RepaymentSummaryStep({
   const frequencyLabel = primaryFrequency;
   const totalRepaymentLabel = repaymentFrequencyLabel || frequencyLabel;
   const totalRepaymentNote =
-    repaymentFrequencyNote || `Summed loan-part schedules; weighted ${percent(modelRate)} over ${modelYears} years`;
+    repaymentFrequencyNote || `Summed Loan Tranche schedules; weighted ${percent(modelRate)} over ${modelYears} years`;
   const repaymentPerSelectedPeriod = summary.repayment;
   const monthlyIncome = paymentToAnnual(salaryAmount, primaryFrequency) / 12;
   const monthlyRepayment = paymentToAnnual(repaymentPerSelectedPeriod, primaryFrequency) / 12;
@@ -185,18 +185,20 @@ export function RepaymentBreakdownTable({
       <div className="overflow-hidden rounded-xl border border-[#E2DDD5] bg-white shadow-[0_12px_34px_rgba(27,42,34,0.06)]">
         <table className="w-full table-fixed text-left text-xs sm:text-sm">
           <colgroup>
+            <col className="w-[15%]" />
+            <col className="w-[15%]" />
+            <col className="w-[23%]" />
+            <col className="w-[16%]" />
+            <col className="w-[14%]" />
             <col className="w-[17%]" />
-            <col className="w-[17%]" />
-            <col className="w-[26%]" />
-            <col className="w-[18%]" />
-            <col className="w-[22%]" />
           </colgroup>
           <thead className="bg-[#F7F5F0] text-[10px] uppercase tracking-wide text-[#7B756E] sm:text-xs">
             <tr>
-              <th className="px-2 py-3 sm:px-3">Part</th>
+              <th className="px-2 py-3 sm:px-3">Loan Tranche</th>
               <th className="px-2 py-3 sm:px-3">Type</th>
               <th className="px-2 py-3 sm:px-3">Balance</th>
               <th className="px-2 py-3 sm:px-3">Rate</th>
+              <th className="px-2 py-3 sm:px-3">Frequency</th>
               <th className="px-2 py-3 sm:px-3">Repay.</th>
             </tr>
           </thead>
@@ -207,6 +209,7 @@ export function RepaymentBreakdownTable({
                 <td className="px-2 py-3 sm:px-3">{tranche.type}</td>
                 <td className="break-words px-2 py-3 sm:px-3">{currency(tranche.amount)}</td>
                 <td className="px-2 py-3 sm:px-3">{percent(tranche.rate)}</td>
+                <td className="px-2 py-3 sm:px-3">{tranche.frequency}</td>
                 <td className="break-words px-2 py-3 font-bold text-[#3A6047] sm:px-3">
                   {currency(tranche.repayment)}
                 </td>
@@ -219,7 +222,7 @@ export function RepaymentBreakdownTable({
                 Total balance
               </td>
               <td className="break-words px-2 py-3 font-black sm:px-3">{currency(totalBalance)}</td>
-              <td className="px-2 py-3 font-black sm:px-3">
+              <td className="px-2 py-3 font-black sm:px-3" colSpan={2}>
                 {totalRepaymentLabel} Repayment
               </td>
               <td className="break-words px-2 py-3 font-black text-[#3A6047] sm:px-3">
@@ -231,7 +234,7 @@ export function RepaymentBreakdownTable({
       </div>
       {hasMixedRepaymentFrequencies && (
         <p className="text-xs font-medium leading-5 text-[#7B756E]">
-          Mixed repayment frequencies are not added directly. TrimRate annualises each loan part's actual schedule, then
+          Mixed repayment frequencies are not added directly. TrimRate annualises each loan tranche's actual schedule, then
           converts the total back to the selected cash-flow period for the headline figure.
         </p>
       )}

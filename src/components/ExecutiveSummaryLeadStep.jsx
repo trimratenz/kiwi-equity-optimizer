@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ClipboardCheck, Send } from "lucide-react";
 import { currency, percent } from "../financialModel";
 import { emptyConsentFields, emptyContactFields } from "../summaryPayload.js";
@@ -69,13 +69,22 @@ export function ExecutiveSummaryLeadStep({
   averageFixedRates,
   variableOnly,
   onSubmitLead,
-  onSummaryExported
+  onSummaryExported,
+  resetVersion
 }) {
   const [values, setValues] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [consentTimestamp, setConsentTimestamp] = useState("");
   const [leadFormStarted, setLeadFormStarted] = useState(false);
+
+  useEffect(() => {
+    setValues(EMPTY_FORM);
+    setErrors({});
+    setSubmitted(false);
+    setConsentTimestamp("");
+    setLeadFormStarted(false);
+  }, [resetVersion]);
 
   const contact = useMemo(
     () => ({
@@ -288,7 +297,37 @@ export function ExecutiveSummaryLeadStep({
               <h3 className="text-base font-black text-[#1B2A22]">OCR forecast repayment scenarios</h3>
               <p className="mt-1 text-sm leading-6 text-[#7B756E]">These scenarios show how each tranche&apos;s repayment may change under optimistic, base, and conservative rate assumptions.</p>
               <p className="mt-1 text-xs font-medium leading-5 text-[#7B756E]">Optimistic means a lower-rate scenario. Conservative means a higher-rate scenario.</p>
-              <div className="mt-3 overflow-x-auto rounded-lg border border-[#E2DDD5] bg-white">
+              <div className="mt-3 grid gap-3">
+                {trancheForecasts.map((row) => {
+                  const scenarios = [
+                    ["Optimistic", row.scenarios.find((scenario) => scenario.key === "optimistic")],
+                    ["Base", row.scenarios.find((scenario) => scenario.key === "base")],
+                    ["Conservative", row.scenarios.find((scenario) => scenario.key === "conservative")]
+                  ];
+                  return (
+                    <article key={row.id} className="rounded-lg border border-[#E2DDD5] bg-white p-3 sm:p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="font-black">Tranche {row.index} · {row.frequency} repayment</p>
+                          <p className="text-xs font-medium text-[#7B756E]">Rolling over {row.refixPointLabel === "now" ? "now" : `in ${termLabel(row.refixPointLabel)}`} · {row.fixedTermEnd} · OCR {percent(row.forecastOcr)}</p>
+                        </div>
+                        <p className="text-sm font-bold text-[#1B2A22]">Current: {repaymentLabel(row.currentRepayment, row.frequency)} at {percent(row.currentRate)}</p>
+                      </div>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                        {scenarios.map(([label, scenario]) => (
+                          <div key={label} className="rounded-lg bg-[#F7F5F0] p-3">
+                            <p className="text-xs font-black uppercase tracking-wide text-[#7B756E]">{label}</p>
+                            <p className="mt-1 text-lg font-black text-[#1B2A22]">{scenario ? currency(scenario.repayment) : "Not available"}</p>
+                            {scenario && <p className="text-sm font-medium text-[#4F5A52]">{percent(scenario.forecastMortgageRate)}</p>}
+                            {scenario && <p className="mt-1 text-xs font-bold text-[#4F5A52]">{scenario.repaymentChange >= 0 ? "+" : ""}{currency(scenario.repaymentChange)} / {String(row.frequency).toLowerCase()}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+              <div className="hidden">
                 <table className="w-full min-w-[900px] text-left text-sm">
                   <thead className="bg-[#F7F5F0] text-xs uppercase tracking-wide text-[#7B756E]">
                     <tr><th className="p-3">Tranche</th><th className="p-3">Now</th><th className="p-3">Optimistic</th><th className="p-3">Base</th><th className="p-3">Conservative</th><th className="p-3">Change</th></tr>
@@ -298,28 +337,15 @@ export function ExecutiveSummaryLeadStep({
                       const optimistic = row.scenarios.find((scenario) => scenario.key === "optimistic");
                       const base = row.scenarios.find((scenario) => scenario.key === "base");
                       const conservative = row.scenarios.find((scenario) => scenario.key === "conservative");
-                      const changes = row.scenarios.map((scenario) => scenario.repaymentChange);
-                      const scenarioTone = (scenario) =>
-                        !scenario || Math.abs(scenario.repaymentChange) < 0.5
-                          ? "text-[#7B756E]"
-                          : scenario.repaymentChange > 0
-                            ? "text-[#C86A53]"
-                            : "text-[#3A6047]";
-                      const changeTone =
-                        changes.length === 0 || (Math.min(...changes) < -0.5 && Math.max(...changes) > 0.5)
-                          ? "text-[#7B756E]"
-                          : Math.max(...changes) <= -0.5
-                            ? "text-[#3A6047]"
-                            : Math.min(...changes) >= 0.5
-                              ? "text-[#C86A53]"
-                              : "text-[#7B756E]";
+                      const forecastRates = row.scenarios.map((scenario) => scenario.forecastMortgageRate);
+                      const forecastRepayments = row.scenarios.map((scenario) => scenario.repayment);
                       return <tr key={row.id}>
                         <td className="p-3"><p className="font-black">Tranche {row.index}</p><p className="text-xs font-medium text-[#7B756E]">Rolling over {row.refixPointLabel === "now" ? "now" : `in ${termLabel(row.refixPointLabel)}`}</p><p className="mt-1 text-xs font-medium text-[#7B756E]">{row.fixedTermEnd} · OCR {percent(row.forecastOcr)}</p></td>
-                        <td className="p-3">{repaymentLabel(row.currentRepayment, row.frequency)}</td>
-                        <td className={`p-3 ${scenarioTone(optimistic)}`}>{optimistic ? `${repaymentLabel(optimistic.repayment, row.frequency)} (${percent(optimistic.forecastMortgageRate)})` : "Not available"}</td>
-                        <td className={`p-3 ${scenarioTone(base)}`}>{base ? `${repaymentLabel(base.repayment, row.frequency)} (${percent(base.forecastMortgageRate)})` : "Not available"}</td>
-                        <td className={`p-3 ${scenarioTone(conservative)}`}>{conservative ? `${repaymentLabel(conservative.repayment, row.frequency)} (${percent(conservative.forecastMortgageRate)})` : "Not available"}</td>
-                        <td className={`p-3 font-bold ${changeTone}`}>{changes.length ? forecastRangeLabel(changes, row.frequency) : "Not available"}</td>
+                        <td className="p-3"><p>{repaymentLabel(row.currentRepayment, row.frequency)}</p><p className="mt-1 text-xs font-medium text-[#7B756E]">Current rate {percent(row.currentRate)}</p></td>
+                        <td className="p-3">{optimistic ? `${repaymentLabel(optimistic.repayment, row.frequency)} (${percent(optimistic.forecastMortgageRate)})` : "Not available"}</td>
+                        <td className="p-3">{base ? `${repaymentLabel(base.repayment, row.frequency)} (${percent(base.forecastMortgageRate)})` : "Not available"}</td>
+                        <td className="p-3">{conservative ? `${repaymentLabel(conservative.repayment, row.frequency)} (${percent(conservative.forecastMortgageRate)})` : "Not available"}</td>
+                        <td className="p-3 font-bold">{forecastRates.length ? <><p>{percent(Math.min(...forecastRates))} to {percent(Math.max(...forecastRates))}</p><p className="mt-1 text-xs font-medium">{repaymentLabel(Math.min(...forecastRepayments), row.frequency)} to {repaymentLabel(Math.max(...forecastRepayments), row.frequency)}</p></> : "Not available"}</td>
                       </tr>;
                     })}
                   </tbody>
@@ -347,6 +373,9 @@ export function ExecutiveSummaryLeadStep({
 
         <form onSubmit={handleSubmit} className="no-print rounded-xl border border-[#D6E2DA] bg-[#F4FAF6] p-4 sm:p-5">
           <h3 className="text-lg font-black text-[#1B2A22]">Request a mortgage adviser review</h3>
+          <p className="mt-1 text-sm leading-6 text-[#5F665F]">
+            Want a second opinion? A mortgage adviser can review your numbers and help you understand your options.
+          </p>
           <p className="mt-1 text-sm leading-6 text-[#5F665F]">
             Send this calculator summary to a New Zealand mortgage adviser for a regulated review.
           </p>
