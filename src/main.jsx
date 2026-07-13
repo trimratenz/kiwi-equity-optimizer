@@ -93,7 +93,7 @@ function App() {
     error: ""
   });
   const [ocrSnapshot, setOcrSnapshot] = useState(DEFAULT_OCR_FORECAST_SNAPSHOT);
-  const { hasExistingLoan, loanSituation, loanStructure, salaryIncome, extraPayment, outgoingCosts, interestOnlyYears, tranches } = formState;
+  const { hasExistingLoan, loanStructure, salaryIncome, extraPayment, outgoingCosts, interestOnlyYears, tranches } = formState;
 
   useEffect(() => {
     trackOnce(trackedEvents, "page_view");
@@ -954,7 +954,6 @@ function App() {
       <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
         <LoanBalanceStep
           hasExistingLoan={hasExistingLoan}
-          loanSituation={loanSituation}
           isSplitLoan={isSplitLoan}
           loanStructure={loanStructure}
           displayedTranches={displayedTranches}

@@ -1,7 +1,6 @@
 export function getInitialMortgageFormState() {
   return {
     hasExistingLoan: "yes",
-    loanSituation: "fixed_only",
     loanStructure: "single",
     salaryIncome: "",
     extraPayment: "",

@@ -5,7 +5,6 @@ import { Field, NumberInput, Segmented, Select } from "./ui";
 
 export function LoanBalanceStep({
   hasExistingLoan,
-  loanSituation,
   isSplitLoan,
   loanStructure,
   displayedTranches,
@@ -30,18 +29,13 @@ export function LoanBalanceStep({
         </div>
 
         <div className="grid gap-4">
-          <Field label="Which best describes your situation?">
+          <Field label="Do you already have a home loan?">
             <Segmented
-              value={loanSituation}
-              onChange={(value) => {
-                dispatch({ type: "SET_FIELD", field: "loanSituation", value });
-                dispatch({ type: "SET_FIELD", field: "hasExistingLoan", value: value === "no_home_loan" ? "no" : "yes" });
-              }}
+              value={hasExistingLoan}
+              onChange={(value) => dispatch({ type: "SET_FIELD", field: "hasExistingLoan", value })}
               options={[
-                { value: "fixed_only", label: "I have fixed home loan only" },
-                { value: "floating_only", label: "I have a floating home loan only" },
-                { value: "mixed", label: "I have both fixed and floating home loans" },
-                { value: "no_home_loan", label: "I do not have a home loan yet" }
+                { value: "yes", label: "Yes" },
+                { value: "no", label: "No" }
               ]}
             />
           </Field>

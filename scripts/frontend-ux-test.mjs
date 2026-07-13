@@ -13,7 +13,8 @@ assert.match(main, /forecastTranches\.filter\(\(tranche\) => tranche\.type === "
 assert.match(main, /const shouldShowRefix = setupComplete && fixedForecastTranches\.length > 0/, "all floating loans skip the OCR step");
 assert.match(main, /fixedForecastTranches\.map\(\(tranche\) =>/, "summary OCR scenarios only use fixed tranches");
 const stepOne = readFileSync(new URL("../src/components/LoanBalanceStep.jsx", import.meta.url), "utf8");
-assert.match(stepOne, /Which best describes your situation\?/, "loan situation selector renders");
+assert.match(stepOne, /Do you already have a home loan\?/, "existing-loan selector renders");
+assert.doesNotMatch(stepOne, /Which best describes your situation\?/, "loan situation selector is removed");
 assert.match(stepOne, /Your actual repayment/, "actual repayment input renders");
 assert.match(stepOne, /This is lower than the estimated minimum/, "lower repayment soft warning renders");
 assert.match(stepOne, /value: "Floating", label: "Floating"/, "loan type uses Floating wording");
