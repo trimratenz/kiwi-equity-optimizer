@@ -1,4 +1,0 @@
-import { csv, requireAdmin } from "../../_lib/admin.js";
-import { method, safeError } from "../../_lib/http.js";
-import { select } from "../../_lib/supabase.js";
-export default async function handler(request, response) { if (!method(request, response, "GET") || !requireAdmin(request, response)) return; try { const rows = await select("analytics_events", "select=*&order=created_at.desc"); response.setHeader("content-type", "text/csv; charset=utf-8"); response.setHeader("content-disposition", "attachment; filename=trimrate-analytics-events.csv"); response.setHeader("cache-control", "no-store"); response.status(200).send(`${csv(rows, ["created_at", "session_id", "event_name", "page_path", "step_number", "step_name", "device_type", "referrer", "metadata"])}\n`); } catch (error) { console.error(error); safeError(response); } }

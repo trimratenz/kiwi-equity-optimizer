@@ -5,7 +5,13 @@
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "rewrites": [
-    { "source": "/admin", "destination": "/api/admin/page" },
+    { "source": "/api/market-rates/latest", "destination": "/api/public?route=market-rates/latest" },
+    { "source": "/api/ocr-snapshot/latest", "destination": "/api/public?route=ocr-snapshot/latest" },
+    { "source": "/api/adviser-review-request", "destination": "/api/public?route=adviser-review-request" },
+    { "source": "/api/analytics/event", "destination": "/api/public?route=analytics/event" },
+    { "source": "/api/admin/(.*)", "destination": "/api/admin?path=$1" },
+    { "source": "/api/cron/(.*)", "destination": "/api/cron?job=$1" },
+    { "source": "/admin", "destination": "/api/admin?path=page" },
     { "source": "/calculator", "destination": "/index.html" },
     { "source": "/info", "destination": "/index.html" },
     { "source": "/contact", "destination": "/index.html" },
@@ -17,8 +23,8 @@
     { "path": "/api/cron/refresh-ocr-snapshot", "schedule": "15 3 * * *" }
   ],
   "functions": {
-    "api/cron/*.js": { "maxDuration": 30 },
-    "api/admin/refresh-*.js": { "maxDuration": 30 }
+    "api/cron.js": { "maxDuration": 30 },
+    "api/admin.js": { "maxDuration": 30 }
   },
   "headers": [
     {
