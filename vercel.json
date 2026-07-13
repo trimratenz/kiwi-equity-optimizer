@@ -1,9 +1,9 @@
 {
   "version": 2,
   "framework": "vite",
-  "buildCommand": "npm run build",
+  "buildCommand": "pnpm run build",
   "outputDirectory": "dist",
-  "installCommand": "npm install",
+  "installCommand": "pnpm install --frozen-lockfile",
   "rewrites": [
     { "source": "/api/market-rates/latest", "destination": "/api/public?route=market-rates/latest" },
     { "source": "/api/ocr-snapshot/latest", "destination": "/api/public?route=ocr-snapshot/latest" },
