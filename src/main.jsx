@@ -37,7 +37,6 @@ import {
   weightedLoanSnapshot
 } from "./financialModel";
 import { getInitialMortgageFormState, mortgageFormReducer, toNumber, toPositive } from "./mortgageFormState";
-import { validateBalanceAtRefix } from "./lib/mortgageCalculations";
 import { fetchMortgageRates } from "./ratesApi";
 import { lowestRateBanks } from "./marketRateUtils";
 import {
@@ -213,10 +212,6 @@ function App() {
           repaymentAmount: repaymentDetails.effectiveCurrentRepaymentExact,
           months: fixedMonths
         });
-        const balanceAtRefixValidation = validateBalanceAtRefix(tranche.balanceAtRefix, amount);
-        const balanceAtRefix = balanceAtRefixValidation.value || 0;
-        const balanceAtRefixError = balanceAtRefixValidation.error;
-
         return {
           ...tranche,
           amount,
@@ -240,10 +235,7 @@ function App() {
           fixedMonths,
           fixedTermTooLong,
           estimatedBalanceAtRefix,
-          balanceAtRefixInput: tranche.balanceAtRefix,
-          balanceAtRefix,
-          balanceAtRefixError,
-          resolvedBalanceAtRefix: !balanceAtRefixError && balanceAtRefix > 0 ? balanceAtRefix : estimatedBalanceAtRefix
+          resolvedBalanceAtRefix: estimatedBalanceAtRefix
         };
       }),
     [displayedTranches, isExistingLoan]
@@ -569,9 +561,6 @@ function App() {
           fixedTermEnd: displayDate(addMonthsToDate(CALCULATION_AS_OF_DATE, tranche.fixedMonths)),
           forecastOcr: selectedOption?.forecastOcr ?? 0,
           estimatedBalanceAtRefix: tranche.estimatedBalanceAtRefix,
-          balanceAtRefixInput: tranche.balanceAtRefixInput,
-          balanceAtRefix: tranche.balanceAtRefix,
-          balanceAtRefixError: tranche.balanceAtRefixError,
           resolvedBalanceAtRefix: tranche.resolvedBalanceAtRefix,
           currentRepayment,
           scenarios: selectedOption?.scenarios ?? []
@@ -863,7 +852,7 @@ function App() {
         id,
         field,
         value,
-        decimal: ["amount", "rate", "termYears", "repaymentAmount", "balanceAtRefix", "fixedTermMonths", "fixedMonths"].includes(field)
+        decimal: ["amount", "rate", "termYears", "repaymentAmount", "fixedTermMonths", "fixedMonths"].includes(field)
       });
     });
   }
@@ -1077,7 +1066,6 @@ function App() {
               selectedForecastTermMonths={selectedForecastTermMonths}
               setSelectedForecastTermMonths={setSelectedForecastTermMonths}
               setSelectedForecastTrancheId={setSelectedForecastTrancheId}
-              updateTranche={updateTranche}
               step={visibleSteps.ocrForecast}
             />}
 
