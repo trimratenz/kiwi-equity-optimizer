@@ -102,4 +102,12 @@ const fallbackView = buildRefixScenarioView({
 assert.equal(fallbackView.selectedForecastTranche.id, "part-1", "stale selected id falls back to first active part");
 assert.equal(fallbackView.selectedForecastTermMonths, 12, "stale selected term falls back to 1 year");
 
+const adjustedBalanceView = buildRefixScenarioView({
+  tranches: [{ ...tranches[0], resolvedBalanceAtRefix: 480000 }],
+  selectedTrancheId: "part-1",
+  selectedTermMonths: 12,
+  fallbackFrequency: "Monthly"
+});
+assertClose(adjustedBalanceView.selectedForecastRow.remainingBalance, 480000, "manual balance at refix is used for scenarios");
+
 console.log("Re-fix scenario selection test passed");

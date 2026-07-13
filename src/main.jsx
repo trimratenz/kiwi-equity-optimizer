@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Banknote, CalendarClock, Home, RefreshCw, SlidersHorizontal } from "lucide-react";
 import "./index.css";
-import { submitLeadPayload, trackCalculatorRun, trackEvent } from "./analyticsClient";
+import { submitLeadPayload, trackEvent } from "./analyticsClient";
+import { fetchOcrSnapshot } from "./ocrApi";
 import { LoanBalanceStep } from "./components/LoanBalanceStep";
 import { ExecutiveSummaryLeadStep } from "./components/ExecutiveSummaryLeadStep";
 import { MarketRateComparisonStep } from "./components/MarketRateComparisonStep";
@@ -14,6 +15,7 @@ import {
   FREQUENCY_CONFIG,
   CALCULATION_AS_OF_DATE,
   MARKET_RATE_SNAPSHOT,
+  balanceAfterMonths,
   buildPlainEnglishSummary,
   buildLoanPartRepaymentDetails,
   buildRefixScenarioView,
@@ -34,7 +36,9 @@ import {
   weightedLoanSnapshot
 } from "./financialModel";
 import { getInitialMortgageFormState, mortgageFormReducer, toNumber, toPositive } from "./mortgageFormState";
+import { validateBalanceAtRefix } from "./lib/mortgageCalculations";
 import { fetchMortgageRates } from "./ratesApi";
+import { lowestRateBanks } from "./marketRateUtils";
 import {
   DEFAULT_OCR_FORECAST_SNAPSHOT,
   LATEST_KNOWN_RBNZ_MPS,
@@ -44,6 +48,8 @@ import {
 } from "./snapshotLayer.js";
 import { buildSummaryPayload, monthlyEquivalent } from "./summaryPayload.js";
 import { LegalPage } from "./LegalPage.jsx";
+import { InfoPage } from "./InfoPage.jsx";
+import { ContactPage } from "./ContactPage.jsx";
 
 function displayDate(date) {
   if (!date) return "";
@@ -85,10 +91,19 @@ function App() {
     status: "idle",
     error: ""
   });
-  const { hasExistingLoan, loanStructure, salaryIncome, extraPayment, outgoingCosts, interestOnlyYears, tranches } = formState;
+  const [ocrSnapshot, setOcrSnapshot] = useState(DEFAULT_OCR_FORECAST_SNAPSHOT);
+  const { hasExistingLoan, loanSituation, loanStructure, salaryIncome, extraPayment, outgoingCosts, interestOnlyYears, tranches } = formState;
 
   useEffect(() => {
     trackOnce(trackedEvents, "page_view");
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchOcrSnapshot()
+      .then((snapshot) => { if (!cancelled) setOcrSnapshot(snapshot); })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -141,8 +156,8 @@ function App() {
   }, []);
 
   const ocrForecastWarnings = useMemo(
-    () => evaluateLatestMpsWarnings(DEFAULT_OCR_FORECAST_SNAPSHOT, LATEST_KNOWN_RBNZ_MPS),
-    []
+    () => evaluateLatestMpsWarnings(ocrSnapshot, LATEST_KNOWN_RBNZ_MPS),
+    [ocrSnapshot]
   );
   const dataWarnings = useMemo(
     () => [...(marketRates.warnings || []), ...ocrForecastWarnings],
@@ -184,11 +199,22 @@ function App() {
         const needsActualRepayment = usesActualRepayment && String(tranche.repaymentAmount ?? "").trim() === "";
         const repaymentValidationError = needsActualRepayment
           ? {
-              code: "current-repayment-below-minimum",
+              code: "current-repayment-required",
               minimumRepaymentExact: repaymentDetails.calculatedMinimumRepaymentExact,
               minimumRepaymentRounded: repaymentDetails.calculatedMinimumRepaymentRounded
             }
           : repaymentDetails.repaymentValidationError;
+        const estimatedBalanceAtRefix = balanceAfterMonths({
+          principal: amount,
+          annualRate: rate,
+          years: calculationTermYears,
+          frequency,
+          repaymentAmount: repaymentDetails.effectiveCurrentRepaymentExact,
+          months: fixedMonths
+        });
+        const balanceAtRefixValidation = validateBalanceAtRefix(tranche.balanceAtRefix, amount);
+        const balanceAtRefix = balanceAtRefixValidation.value || 0;
+        const balanceAtRefixError = balanceAtRefixValidation.error;
 
         return {
           ...tranche,
@@ -207,10 +233,16 @@ function App() {
           effectiveCurrentRepaymentExact: repaymentDetails.effectiveCurrentRepaymentExact,
           repaymentSource: repaymentDetails.repaymentSource,
           repaymentValidationError,
+          repaymentWarning: repaymentDetails.repaymentWarning,
           frequency,
           fixedTermMonths,
           fixedMonths,
-          fixedTermTooLong
+          fixedTermTooLong,
+          estimatedBalanceAtRefix,
+          balanceAtRefixInput: tranche.balanceAtRefix,
+          balanceAtRefix,
+          balanceAtRefixError,
+          resolvedBalanceAtRefix: !balanceAtRefixError && balanceAtRefix > 0 ? balanceAtRefix : estimatedBalanceAtRefix
         };
       }),
     [displayedTranches, isExistingLoan]
@@ -241,6 +273,7 @@ function App() {
       !tranche.repaymentValidationError
   );
   const setupComplete = loanAmount > 0 && allTranchesComplete;
+  const shouldShowRefix = setupComplete && (loanSituation === "fixed_only" || loanSituation === "mixed");
 
   const loan = useMemo(() => weightedLoanSnapshot(mathTranches, "Monthly"), [mathTranches]);
   const modelRate = loan.weightedRate || 0;
@@ -289,7 +322,7 @@ function App() {
         fallbackYears: modelYears,
         marketRates: marketRates.rates,
         bankRateSnapshotId: marketRates.snapshotId,
-        ocrSnapshot: DEFAULT_OCR_FORECAST_SNAPSHOT
+        ocrSnapshot
       }),
     [
       forecastTranches,
@@ -300,7 +333,8 @@ function App() {
       modelRate,
       modelYears,
       marketRates.rates,
-      marketRates.snapshotId
+      marketRates.snapshotId,
+      ocrSnapshot
     ]
   );
   const {
@@ -465,9 +499,7 @@ function App() {
     const selectedBankRate = marketRates.rawRecords.find(
       (record) => record.institutionId === selectedBankId && record.termInMonths === matchedMonths
     );
-    const lowestRate = marketRates.rawRecords
-      .filter((record) => record.termInMonths === matchedMonths)
-      .sort((a, b) => a.rate - b.rate)[0];
+    const lowest = lowestRateBanks(marketRates.rawRecords, matchedMonths);
     const comparisonRate = selectedBankRate?.rate ?? closestRate.rate;
     const comparisonSource = selectedBankRate?.institution ?? "Five-bank average";
     const marketRepayment = calculateLoanPartRepayment(
@@ -487,8 +519,8 @@ function App() {
       marketTerm: closestRate.term,
       marketRate: comparisonRate,
       comparisonSource,
-      lowestBank: lowestRate?.institution ?? "Unavailable",
-      lowestRate: lowestRate?.rate ?? null,
+      lowestBanks: lowest.banks,
+      lowestRate: lowest.rate,
       currentRate: tranche.rate,
       difference: tranche.rate ? tranche.rate - comparisonRate : 0,
       currentRepayment,
@@ -510,9 +542,10 @@ function App() {
           frequency: tranche.frequency,
           currentPayment: currentRepayment,
           fixedEndsInMonths: tranche.fixedMonths,
+          balanceAtRefix: tranche.resolvedBalanceAtRefix,
           marketRates: marketRates.rates,
           bankRateSnapshotId: marketRates.snapshotId,
-          ocrSnapshot: DEFAULT_OCR_FORECAST_SNAPSHOT
+          ocrSnapshot
         });
         const selectedOption =
           forecastOptions.find((option) => option.months === selectedForecastTermMonths) ??
@@ -532,11 +565,16 @@ function App() {
               ? displayDate(addMonthsToDate(CALCULATION_AS_OF_DATE, tranche.fixedMonths))
               : "Available now",
           forecastOcr: selectedOption?.forecastOcr ?? 0,
+          estimatedBalanceAtRefix: tranche.estimatedBalanceAtRefix,
+          balanceAtRefixInput: tranche.balanceAtRefixInput,
+          balanceAtRefix: tranche.balanceAtRefix,
+          balanceAtRefixError: tranche.balanceAtRefixError,
+          resolvedBalanceAtRefix: tranche.resolvedBalanceAtRefix,
           currentRepayment,
           scenarios: selectedOption?.scenarios ?? []
         };
       }),
-    [forecastTranches, marketRates.rates, marketRates.snapshotId, selectedForecastTermMonths, tranchesWithPayments]
+    [forecastTranches, marketRates.rates, marketRates.snapshotId, ocrSnapshot, selectedForecastTermMonths, tranchesWithPayments]
   );
   const variableOnly = forecastTranches.length > 0 && forecastTranches.every((tranche) => tranche.type === "Variable");
   const averageFixedRates = marketRates.rates.filter((rate) => marketTermMonths(rate.term) > 0);
@@ -620,8 +658,8 @@ function App() {
       dataSnapshots: {
         bankRateSnapshotId: marketRates.snapshotId,
         bankRatesLastRefreshed: marketRates.lastRefreshed || marketRates.captured,
-        ocrForecastSnapshotId: DEFAULT_OCR_FORECAST_SNAPSHOT.id,
-        ocrForecastLastRefreshed: DEFAULT_OCR_FORECAST_SNAPSHOT.lastRefreshed,
+        ocrForecastSnapshotId: ocrSnapshot.id,
+        ocrForecastLastRefreshed: ocrSnapshot.lastRefreshed,
         latestKnownMpsPublishedAt: LATEST_KNOWN_RBNZ_MPS.publishedAt,
         warnings: dataWarnings
       },
@@ -637,7 +675,7 @@ function App() {
           selectedForecastRow
         },
         bankRateSnapshot: { id: marketRates.snapshotId },
-        ocrForecastSnapshot: DEFAULT_OCR_FORECAST_SNAPSHOT
+        ocrForecastSnapshot: ocrSnapshot
       }),
       rawFormState: formState
     }),
@@ -666,6 +704,7 @@ function App() {
       marketRates.snapshotId,
       marketRates.lastRefreshed,
       marketRates.captured,
+      ocrSnapshot,
       dataWarnings,
       formState
     ]
@@ -674,7 +713,7 @@ function App() {
     () =>
       buildSummaryPayload({
         ratesSnapshotId: marketRates.snapshotId,
-        ocrSnapshotId: DEFAULT_OCR_FORECAST_SNAPSHOT.id,
+        ocrSnapshotId: ocrSnapshot.id,
         inputs: {
           hasExistingLoan: isExistingLoan,
           loanBalance: loanAmount,
@@ -763,6 +802,7 @@ function App() {
       }),
     [
       marketRates.snapshotId,
+      ocrSnapshot.id,
       isExistingLoan,
       loanAmount,
       loanStructure,
@@ -810,7 +850,6 @@ function App() {
     if (!trackedEvents.current.has("summary_viewed")) {
       trackedEvents.current.add("summary_viewed");
       trackEvent("summary_viewed");
-      trackCalculatorRun(summaryPayloadBase);
     }
   }, [loanStructure, normalizedTranches.length, setupComplete, summaryPayloadBase]);
 
@@ -821,7 +860,7 @@ function App() {
         id,
         field,
         value,
-        decimal: ["amount", "rate", "termYears", "repaymentAmount", "fixedTermMonths", "fixedMonths"].includes(field)
+        decimal: ["amount", "rate", "termYears", "repaymentAmount", "balanceAtRefix", "fixedTermMonths", "fixedMonths"].includes(field)
       });
     });
   }
@@ -893,20 +932,26 @@ function App() {
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={resetTool}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#E2DDD5] bg-white px-4 text-sm font-bold text-[#1B2A22] shadow-sm hover:border-[#3A6047]/70 hover:text-[#3A6047]"
-          >
-            <RefreshCw size={16} aria-hidden="true" />
-            Reset
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <a href="/calculator" className="inline-flex h-11 items-center rounded-lg px-3 text-sm font-bold text-[#1B2A22] hover:bg-[#F7F5F0]">Calculator</a>
+            <a href="/info" className="inline-flex h-11 items-center rounded-lg px-3 text-sm font-bold text-[#1B2A22] hover:bg-[#F7F5F0]">Info</a>
+            <a href="/contact" className="inline-flex h-11 items-center rounded-lg px-3 text-sm font-bold text-[#1B2A22] hover:bg-[#F7F5F0]">Contact</a>
+            <button
+              type="button"
+              onClick={resetTool}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#E2DDD5] bg-white px-4 text-sm font-bold text-[#1B2A22] shadow-sm hover:border-[#3A6047]/70 hover:text-[#3A6047]"
+            >
+              <RefreshCw size={16} aria-hidden="true" />
+              Reset
+            </button>
+          </div>
         </div>
       </header>
 
       <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
         <LoanBalanceStep
           hasExistingLoan={hasExistingLoan}
+          loanSituation={loanSituation}
           isSplitLoan={isSplitLoan}
           loanStructure={loanStructure}
           displayedTranches={displayedTranches}
@@ -1015,7 +1060,7 @@ function App() {
               setSelectedBankId={setSelectedMarketBankId}
             />
 
-            <RateStressStep
+            {shouldShowRefix && <RateStressStep
               forecastRows={forecastRows}
               forecastTranches={forecastTranches}
               selectedForecastTranche={selectedForecastTranche}
@@ -1027,7 +1072,8 @@ function App() {
               selectedForecastTermMonths={selectedForecastTermMonths}
               setSelectedForecastTermMonths={setSelectedForecastTermMonths}
               setSelectedForecastTrancheId={setSelectedForecastTrancheId}
-            />
+              updateTranche={updateTranche}
+            />}
 
             <OptimizationStep
               extraPayment={extraPayment}
@@ -1079,6 +1125,8 @@ function App() {
 }
 
 function Root() {
+  if (window.location.pathname === "/info") return <InfoPage />;
+  if (window.location.pathname === "/contact") return <ContactPage />;
   if (window.location.pathname === "/privacy-policy") return <LegalPage type="privacy" />;
   if (window.location.pathname === "/terms-of-use") return <LegalPage type="terms" />;
   return <App />;

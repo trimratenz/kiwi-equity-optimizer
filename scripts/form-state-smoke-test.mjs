@@ -14,6 +14,7 @@ let existingSingle = getInitialMortgageFormState();
 const existingSingleId = existingSingle.tranches[0].id;
 
 assert.equal(existingSingle.hasExistingLoan, "yes", "Existing loan should be the default flow");
+assert.equal(existingSingle.loanSituation, "fixed_only", "Fixed home loan is the default situation");
 existingSingle = updateTranche(existingSingle, existingSingleId, "amount", "600000");
 existingSingle = updateTranche(existingSingle, existingSingleId, "originalLoanAmount", "700000");
 assert.equal(existingSingle.loanStructure, "single", "Existing one-loan flow should remain single");

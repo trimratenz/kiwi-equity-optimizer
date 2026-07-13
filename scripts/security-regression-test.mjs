@@ -1,0 +1,30 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { authenticateAdmin, requireCron } from "../api/_lib/security.js";
+
+const originalEmail = process.env.ADMIN_EMAIL;
+const originalPassword = process.env.ADMIN_PASSWORD;
+const originalCron = process.env.CRON_SECRET;
+
+try {
+  delete process.env.ADMIN_EMAIL;
+  delete process.env.ADMIN_PASSWORD;
+  assert.equal(authenticateAdmin("", ""), false, "empty admin environment must not permit a login");
+
+  process.env.ADMIN_EMAIL = "admin@example.co.nz";
+  process.env.ADMIN_PASSWORD = "long-test-password";
+  assert.equal(authenticateAdmin("admin@example.co.nz", "long-test-password"), true, "configured admin credentials work");
+  assert.equal(authenticateAdmin("admin@example.co.nz", "wrong-password"), false, "wrong password is rejected");
+
+  process.env.CRON_SECRET = "cron-test-secret";
+  assert.equal(requireCron({ headers: { authorization: "Bearer cron-test-secret" }, query: {} }), true, "cron bearer secret works");
+  assert.equal(requireCron({ headers: {}, query: { secret: "cron-test-secret" } }), false, "cron secret is never accepted in a URL");
+
+  const refreshSource = readFileSync(new URL("../api/_lib/refresh.js", import.meta.url), "utf8");
+  assert.match(refreshSource, /Provider refresh failed; keeping the latest valid saved snapshot/, "failed provider refresh keeps saved market data");
+  console.log("Security regression test passed");
+} finally {
+  if (originalEmail === undefined) delete process.env.ADMIN_EMAIL; else process.env.ADMIN_EMAIL = originalEmail;
+  if (originalPassword === undefined) delete process.env.ADMIN_PASSWORD; else process.env.ADMIN_PASSWORD = originalPassword;
+  if (originalCron === undefined) delete process.env.CRON_SECRET; else process.env.CRON_SECRET = originalCron;
+}

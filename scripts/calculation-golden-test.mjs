@@ -18,7 +18,8 @@ import {
   calculatePayoffTime,
   calculateRemainingBalance,
   calculateScenarioComparison,
-  calculateTotalInterest
+  calculateTotalInterest,
+  validateBalanceAtRefix
 } from "../src/lib/mortgageCalculations.js";
 
 const tolerance = 1e-6;
@@ -241,13 +242,41 @@ const invalidOverride = buildLoanPartRepaymentDetails({
   frequency: "Fortnightly",
   userCurrentRepayment: 900
 });
-assert.equal(invalidOverride.repaymentValidationError.code, "current-repayment-below-minimum", "invalid override error");
+assert.equal(invalidOverride.repaymentValidationError, null, "lower actual repayment is a soft warning, not a validation error");
+assert.equal(invalidOverride.repaymentWarning.code, "current-repayment-below-minimum", "lower actual repayment warning");
 assertClose(
   invalidOverride.effectiveCurrentRepaymentExact,
-  990.077738350965,
-  "invalid override falls back to calculated minimum"
+  900,
+  "lower actual repayment is used"
 );
-assert.equal(invalidOverride.repaymentSource, "calculated", "invalid override is not used");
+assert.equal(invalidOverride.repaymentSource, "user_override", "lower actual repayment remains an entered repayment");
+
+const equalOverride = buildLoanPartRepaymentDetails({
+  principal: 395000,
+  annualRate: 5.13,
+  years: 30,
+  frequency: "Fortnightly",
+  userCurrentRepayment: 990.077738350965
+});
+assert.equal(equalOverride.repaymentWarning, null, "equal actual repayment has no warning");
+assert.equal(equalOverride.repaymentSource, "user_override", "equal actual repayment is used");
+assert.equal(overridePart1.repaymentWarning, null, "higher actual repayment has no warning");
+
+for (const frequency of ["Weekly", "Fortnightly", "Monthly"]) {
+  const currentBalance = 500000;
+  const laterBalance = balanceAfterMonths({ principal: currentBalance, annualRate: 5, years: 30, frequency, months: 12 });
+  assert.ok(laterBalance > 0 && laterBalance < currentBalance, `${frequency} balance decreases over time`);
+  assertClose(
+    balanceAfterMonths({ principal: currentBalance, annualRate: 5, years: 30, frequency, months: 0 }),
+    currentBalance,
+    `${frequency} balance at re-fix is unchanged at month zero`
+  );
+}
+
+assert.equal(validateBalanceAtRefix("", 500000).valid, true, "blank balance at refix uses estimate");
+assert.equal(validateBalanceAtRefix(490000, 500000).valid, true, "valid balance at refix is accepted");
+assert.equal(validateBalanceAtRefix(0, 500000).valid, false, "zero balance at refix is blocked");
+assert.equal(validateBalanceAtRefix(500001, 500000).valid, false, "balance at refix cannot exceed current balance");
 
 assertClose(
   calculateMinimumRepaymentExact({ principal: 500000, annualRate: 5, years: 30, frequency: "Monthly" }),

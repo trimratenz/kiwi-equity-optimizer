@@ -35,44 +35,33 @@ Recommended Vercel setup:
 1. Push this repo to GitHub.
 2. In Vercel, import `trimratenz/kiwi-equity-optimizer`.
 3. Keep the default Vite project settings, or let `vercel.json` provide them.
-4. Set `VITE_API_BASE_URL` only if the analytics/lead backend is hosted separately. Leave it blank for a frontend-only deployment.
+4. Set the production environment variables listed below. Keep `VITE_API_BASE_URL` blank when the frontend and Vercel Functions share this project.
 
 GitHub Actions runs `npm test` and `npm run build` on pushes to `master`/`main` and on pull requests.
 
-## Backend, analytics, and admin
+## Vercel and Supabase backend MVP
 
-TrimRate includes a small Node HTTP backend using file-backed JSON collections under `data/`. The public app can only write analytics, calculator runs, and consented leads. Lead reads, dashboard metrics, and CSV export are only available through authenticated admin routes.
+Production APIs are Vercel Functions in `api/`, with Supabase Postgres as the durable store. The legacy file-backed local server remains only for existing local test coverage; do not use it for production hosting.
 
-```powershell
-$env:ADMIN_USERNAME="harry"
-$env:ADMIN_PASSWORD="replace-with-a-long-random-password"
-$env:ADMIN_TOKEN="replace-with-a-long-random-token"
-npm run build
-npm run server
-```
+Required Vercel environment variables:
 
-Open `http://127.0.0.1:8787/admin` for the admin dashboard and sign in with the Basic Auth username/password. `ADMIN_TOKEN` is for authenticated API calls such as scripted exports.
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY` (server-side only)
+- `DATABASE_URL` (reserved for future direct database tooling)
+- `CRON_SECRET`
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD`
 
-For Vite development against a separately running backend, set:
+Apply the SQL migration in `supabase/migrations/202607120001_trimrate_mvp.sql` with the Supabase SQL editor or CLI before deploying. It creates: `market_rates`, `market_rate_snapshots`, `ocr_snapshots`, `adviser_review_requests`, and `analytics_events`.
 
-```powershell
-$env:VITE_API_BASE_URL="http://127.0.0.1:8787"
-```
+Vercel Cron is configured in `vercel.json` to call daily market-rate and OCR refresh functions. Vercel automatically sends the cron secret as an Authorization bearer token. The market provider uses Rates API with a manual five-bank fallback; the OCR provider has an RBNZ current-rate parser and a documented manual forecast fallback pending a robust MPS parser.
 
-Production backend note: the current backend uses file-backed JSON storage. That is suitable for a persistent Node host with a writable disk, but not for durable lead/admin storage on Vercel serverless by itself. For production leads and admin reporting, host `npm run server` on a persistent Node platform or replace the storage layer with a managed database, then point the Vercel frontend at it with `VITE_API_BASE_URL`.
+`/admin` is protected with an HttpOnly signed session using `ADMIN_EMAIL` and `ADMIN_PASSWORD`. After deployment, open `https://trimrate.co.nz/admin` and sign in. The dashboard provides summary metrics, raw tables, manual refresh actions, and CSV exports.
 
-Collections created by the backend:
+For domains, add both `trimrate.co.nz` and `www.trimrate.co.nz` in Vercel, set the DNS records Vercel supplies, and redirect one to the preferred canonical domain in the Vercel domain settings. Test the public APIs, an adviser submission, CSV exports, cron logs, and admin logout after production deployment.
 
-- `visitors`
-- `sessions`
-- `events`
-- `step_completions`
-- `calculator_runs`
-- `rate_snapshots`
-- `ocr_snapshots`
-- `leads`
-- `lead_exports`
-- `admin_users`
+Legal copy is draft content and must be reviewed by a qualified legal professional before production launch.
 
 ## What is included
 

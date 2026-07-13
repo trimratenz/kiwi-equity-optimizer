@@ -5,6 +5,7 @@ import { Field, NumberInput, Segmented, Select } from "./ui";
 
 export function LoanBalanceStep({
   hasExistingLoan,
+  loanSituation,
   isSplitLoan,
   loanStructure,
   displayedTranches,
@@ -28,13 +29,18 @@ export function LoanBalanceStep({
         </div>
 
         <div className="grid gap-4">
-          <Field label="Do you already have a home loan?">
+          <Field label="Which best describes your situation?">
             <Segmented
-              value={hasExistingLoan}
-              onChange={(value) => dispatch({ type: "SET_FIELD", field: "hasExistingLoan", value })}
+              value={loanSituation}
+              onChange={(value) => {
+                dispatch({ type: "SET_FIELD", field: "loanSituation", value });
+                dispatch({ type: "SET_FIELD", field: "hasExistingLoan", value: value === "no_home_loan" ? "no" : "yes" });
+              }}
               options={[
-                { value: "yes", label: "Yes" },
-                { value: "no", label: "No" }
+                { value: "fixed_only", label: "I have fixed home loan only" },
+                { value: "variable_only", label: "I have variable/floating home loan only" },
+                { value: "mixed", label: "I have both fixed and variable/floating home loans" },
+                { value: "no_home_loan", label: "I do not have a home loan yet" }
               ]}
             />
           </Field>
@@ -60,8 +66,6 @@ export function LoanBalanceStep({
             const normalized = normalizedTranches[index];
             const termMonths = (normalized?.termYears || 0) * 12;
             const frequencyLabel = FREQUENCY_CONFIG[normalized?.frequency || tranche.frequency]?.label || "period";
-            const paysMoreThanMinimum =
-              tranche.paysMoreThanMinimum === "yes" || Boolean(String(tranche.repaymentAmount ?? "").trim());
             const canShowMinimum =
               normalized?.amount > 0 &&
               normalized?.hasInterestRate &&
@@ -223,7 +227,7 @@ export function LoanBalanceStep({
                     </div>
                   )}
 
-                  <div className="grid gap-3 rounded-lg border border-[#E2DDD5] bg-[#F7F5F0] p-3 sm:grid-cols-[1fr_220px] sm:items-end">
+                  <div className="grid gap-3 rounded-lg border border-[#E2DDD5] bg-[#F7F5F0] p-3 sm:grid-cols-2 sm:items-end">
                     <div>
                       <p className="text-xs font-black uppercase tracking-wide text-[#7B756E]">
                         Estimated minimum repayment
@@ -233,44 +237,27 @@ export function LoanBalanceStep({
                       </p>
                       <p className="mt-1 text-xs font-medium text-[#7B756E]">Per {frequencyLabel}</p>
                     </div>
-                    <Field label="Paying more?">
-                      <Segmented
-                        value={paysMoreThanMinimum ? "yes" : "no"}
-                        onChange={(value) =>
-                          updateTranche(tranche.id, {
-                            paysMoreThanMinimum: value,
-                            repaymentAmount: value === "yes" ? tranche.repaymentAmount : ""
-                          })
-                        }
-                        options={[
-                          { value: "no", label: "No" },
-                          { value: "yes", label: "Yes" }
-                        ]}
+                    <Field
+                      label="Your actual repayment"
+                      hint={`Per ${frequencyLabel}`}
+                      error={normalized?.repaymentValidationError ? "Enter an actual repayment greater than $0, or leave this blank to use the estimate." : undefined}
+                    >
+                      <NumberInput
+                        value={tranche.repaymentAmount}
+                        onChange={(value) => updateTranche(tranche.id, { repaymentAmount: value, paysMoreThanMinimum: value ? "yes" : "no" })}
+                        step={10}
+                        prefix="$"
+                        placeholder="Optional"
+                        thousands
                       />
                     </Field>
-                    {paysMoreThanMinimum && (
-                      <div className="sm:col-span-2">
-                        <Field
-                          label="Actual repayment amount"
-                          hint={`Per ${frequencyLabel}`}
-                          error={
-                            normalized?.repaymentValidationError
-                              ? "This amount is below the estimated minimum repayment. Please check your repayment amount."
-                              : undefined
-                          }
-                        >
-                          <NumberInput
-                            value={tranche.repaymentAmount}
-                            onChange={(value) =>
-                              updateTranche(tranche.id, { repaymentAmount: value, paysMoreThanMinimum: "yes" })
-                            }
-                            step={10}
-                            prefix="$"
-                            placeholder="0"
-                            thousands
-                          />
-                        </Field>
-                      </div>
+                    <p className="sm:col-span-2 text-xs font-medium leading-5 text-[#7B756E]">
+                      If you pay more than the minimum, enter your actual repayment. We&apos;ll use this for the comparison.
+                    </p>
+                    {normalized?.repaymentWarning && (
+                      <p className="sm:col-span-2 rounded-md bg-[#FFF8E1] px-3 py-2 text-xs font-semibold leading-5 text-[#6B5B2A]">
+                        This is lower than the estimated minimum. Check the amount or continue only if this reflects your actual arrangement.
+                      </p>
                     )}
                   </div>
                 </div>

@@ -5,9 +5,21 @@
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "rewrites": [
+    { "source": "/admin", "destination": "/api/admin/page" },
+    { "source": "/calculator", "destination": "/index.html" },
+    { "source": "/info", "destination": "/index.html" },
+    { "source": "/contact", "destination": "/index.html" },
     { "source": "/privacy-policy", "destination": "/index.html" },
     { "source": "/terms-of-use", "destination": "/index.html" }
   ],
+  "crons": [
+    { "path": "/api/cron/refresh-market-rates", "schedule": "0 3 * * *" },
+    { "path": "/api/cron/refresh-ocr-snapshot", "schedule": "15 3 * * *" }
+  ],
+  "functions": {
+    "api/cron/*.js": { "maxDuration": 30 },
+    "api/admin/refresh-*.js": { "maxDuration": 30 }
+  },
   "headers": [
     {
       "source": "/assets/(.*)",

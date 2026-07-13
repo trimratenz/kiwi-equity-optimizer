@@ -14,6 +14,17 @@ export function optionalMoney(value) {
   return Number.isFinite(numeric) ? Math.max(numeric, 0) : null;
 }
 
+export function validateBalanceAtRefix(balanceAtRefix, currentLoanBalance) {
+  if (balanceAtRefix === undefined || balanceAtRefix === null || String(balanceAtRefix).trim() === "") {
+    return { valid: true, value: null, error: "" };
+  }
+  const value = optionalMoney(balanceAtRefix);
+  const currentBalance = safeMoney(currentLoanBalance);
+  if (value === null || value <= 0) return { valid: false, value: 0, error: "Balance at refix must be greater than $0." };
+  if (value > currentBalance) return { valid: false, value, error: "Balance at refix cannot be greater than the current balance." };
+  return { valid: true, value, error: "" };
+}
+
 export function safeFrequency(frequency = "Monthly") {
   return FREQUENCY_CONFIG[frequency] ? frequency : "Monthly";
 }
@@ -81,7 +92,7 @@ export function buildLoanPartRepaymentDetails({
   const calculatedMinimumRepaymentRounded = Math.round(calculatedMinimumRepaymentExact);
   const userCurrentRepaymentExact = optionalMoney(userCurrentRepayment);
   const hasUserRepayment = userCurrentRepaymentExact !== null;
-  const hasValidUserRepayment = hasUserRepayment && userCurrentRepaymentExact >= calculatedMinimumRepaymentExact;
+  const hasValidUserRepayment = hasUserRepayment && userCurrentRepaymentExact > 0;
   const effectiveCurrentRepaymentExact = hasValidUserRepayment
     ? userCurrentRepaymentExact
     : calculatedMinimumRepaymentExact;
@@ -94,6 +105,14 @@ export function buildLoanPartRepaymentDetails({
     repaymentSource: hasValidUserRepayment ? "user_override" : "calculated",
     repaymentValidationError:
       hasUserRepayment && !hasValidUserRepayment
+        ? {
+            code: "current-repayment-required",
+            minimumRepaymentExact: calculatedMinimumRepaymentExact,
+            minimumRepaymentRounded: calculatedMinimumRepaymentRounded
+          }
+        : null,
+    repaymentWarning:
+      hasValidUserRepayment && userCurrentRepaymentExact < calculatedMinimumRepaymentExact
         ? {
             code: "current-repayment-below-minimum",
             minimumRepaymentExact: calculatedMinimumRepaymentExact,
@@ -128,7 +147,7 @@ export function amortizeLoanPart({
     remainingYears: safeYears,
     frequency: safeFrequencyName
   });
-  const usesRepaymentOverride = repaymentOverride >= minimumPayment;
+  const usesRepaymentOverride = repaymentOverride > 0;
   const basePayment = usesRepaymentOverride ? repaymentOverride : minimumPayment;
   const extraPerPeriod = safeMoney(extraPayment);
   const interestOnlyPeriods = Math.round(Math.max(Number(interestOnlyYears) || 0, 0) * paymentCount);

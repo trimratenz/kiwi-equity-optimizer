@@ -742,6 +742,7 @@ export function forecastRefixRows({
   frequency,
   currentPayment,
   fixedEndsInMonths = 0,
+  balanceAtRefix,
   marketRates = MARKET_RATE_SNAPSHOT.rates,
   bankRateSnapshotId = MARKET_RATE_SNAPSHOT.snapshotId,
   ocrSnapshot = DEFAULT_OCR_FORECAST_SNAPSHOT,
@@ -750,8 +751,9 @@ export function forecastRefixRows({
   const expiryMonths = Math.max(Number(fixedEndsInMonths) || 0, 0);
   const rbnzOcr = rbnzOcrForMonths(expiryMonths, ocrSnapshot, calculationDate);
   const forecastOcr = rbnzOcr.ocr;
-  const ocrMove = forecastOcr - CURRENT_OCR_ASSUMPTION;
-  const remainingBalance = balanceAfterMonths({
+  // Use the supplied snapshot's current OCR so refreshed backend snapshots remain internally consistent.
+  const ocrMove = forecastOcr - Number(ocrSnapshot?.currentOcr ?? CURRENT_OCR_ASSUMPTION);
+  const estimatedBalance = balanceAfterMonths({
     principal,
     annualRate: currentRate,
     years,
@@ -759,6 +761,8 @@ export function forecastRefixRows({
     repaymentAmount: currentPayment,
     months: expiryMonths
   });
+  const suppliedBalance = Number(balanceAtRefix);
+  const remainingBalance = Number.isFinite(suppliedBalance) && suppliedBalance > 0 ? suppliedBalance : estimatedBalance;
   const remainingYears = Math.max((years * 12 - expiryMonths) / 12, 1);
 
   return FIXED_TERM_OPTIONS.map((term) => {
@@ -799,6 +803,7 @@ export function forecastRefixRows({
       marketRateToday,
       forecastMortgageRate: baseScenario.forecastMortgageRate,
       remainingBalance,
+      estimatedBalance,
       remainingYears,
       repayment: baseScenario.repayment,
       repaymentChange: baseScenario.repaymentChange,
@@ -832,6 +837,7 @@ export function buildRefixScenarioView({
     frequency: selectedFrequency,
     currentPayment: selectedPayment,
     fixedEndsInMonths: selectedTranche?.fixedMonths ?? 0,
+    balanceAtRefix: selectedTranche?.resolvedBalanceAtRefix,
     marketRates,
     bankRateSnapshotId,
     ocrSnapshot,

@@ -18,31 +18,34 @@ export function analyticsContext() {
 }
 
 export function trackEvent(eventName, payload = {}) {
-  return postPublic("/api/events", {
-    ...analyticsContext(),
-    eventName,
-    payload,
-    createdAt: new Date().toISOString()
-  });
-}
-
-export function trackCalculatorRun(summaryPayload) {
-  return postPublic("/api/calculator-runs", {
-    ...analyticsContext(),
-    summaryPayload,
-    createdAt: new Date().toISOString()
+  const context = analyticsContext();
+  return postPublic("/api/analytics/event", {
+    session_id: context.sessionId,
+    event_name: eventName,
+    page_path: context.path,
+    referrer: context.referrer,
+    metadata: safeAnalyticsMetadata(payload)
   });
 }
 
 export function submitLeadPayload({ contact, consent, summaryPayload, website = "" }) {
-  return postPublic("/api/leads", {
-    ...analyticsContext(),
+  return postPublic("/api/adviser-review-request", {
     contact,
     consent,
     summaryPayload,
     website,
     createdAt: new Date().toISOString()
   });
+}
+
+function safeAnalyticsMetadata(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return {};
+  return Object.fromEntries(
+    Object.entries(payload)
+      .filter(([key]) => !/name|email|phone|address|loan|balance|income|summary/i.test(key))
+      .slice(0, 15)
+      .map(([key, value]) => [key, typeof value === "string" ? value.slice(0, 120) : typeof value === "number" || typeof value === "boolean" ? value : ""])
+  );
 }
 
 function getStorageId(storage, key, prefix) {

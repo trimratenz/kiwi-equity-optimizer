@@ -7,7 +7,7 @@ import {
   percent
 } from "../financialModel";
 import { USER_RATE_DATA_NOTICE } from "../snapshotLayer.js";
-import { Segmented, Stat, StepShell } from "./ui";
+import { Field, NumberInput, Segmented, Stat, StepShell } from "./ui";
 
 export function RateStressStep({
   forecastRows,
@@ -20,7 +20,8 @@ export function RateStressStep({
   scenarioLabel,
   selectedForecastTermMonths,
   setSelectedForecastTermMonths,
-  setSelectedForecastTrancheId
+  setSelectedForecastTrancheId,
+  updateTranche
 }) {
   const selectedTerm =
     selectedForecastRow ??
@@ -78,14 +79,41 @@ export function RateStressStep({
             />
             <Stat
               label={isVariableLoanPart ? "Balance if fixed today" : "Balance at re-fix"}
-              value={currency(selectedTerm?.remainingBalance ?? selectedForecastTranche.amount)}
-              sub={isVariableLoanPart ? "Uses the current balance" : "Projected from the current balance"}
+              value={currency(selectedTerm?.remainingBalance ?? selectedForecastTranche.resolvedBalanceAtRefix ?? selectedForecastTranche.amount)}
+              sub={isVariableLoanPart ? "Uses the current balance" : "Projected from the current balance and repayment"}
             />
             <Stat
               label={`Current ${FREQUENCY_CONFIG[selectedForecastFrequency].label} repayment`}
               value={currency(selectedForecastPayment)}
               sub={`At ${percent(selectedForecastTranche.rate)}`}
             />
+          </div>
+        )}
+
+        {selectedForecastTranche?.type === "Fixed" && (
+          <div className="rounded-xl border border-[#E2DDD5] bg-[#F7F5F0] p-4">
+            <Field
+              label="Balance at re-fix"
+              hint="Optional adjustment"
+              error={selectedForecastTranche.balanceAtRefixError || undefined}
+            >
+              <NumberInput
+                value={selectedForecastTranche.balanceAtRefixInput || ""}
+                onChange={(value) => updateTranche(selectedForecastTranche.id, { balanceAtRefix: value })}
+                step={1000}
+                prefix="$"
+                placeholder={String(Math.round(selectedForecastTranche.estimatedBalanceAtRefix ?? selectedTerm?.remainingBalance ?? 0))}
+                thousands
+              />
+            </Field>
+            <p className="mt-2 text-xs font-medium leading-5 text-[#7B756E]">
+              Your balance at refix is used to estimate what your repayments could look like when this loan rolls over.
+            </p>
+            {selectedForecastTranche.estimatedBalanceAtRefix >= selectedForecastTranche.amount && (
+              <p className="mt-2 rounded-md bg-[#FFF8E1] px-3 py-2 text-xs font-semibold leading-5 text-[#6B5B2A]">
+                This estimate has not reduced from today&apos;s balance. Check your repayment amount and months until re-fix.
+              </p>
+            )}
           </div>
         )}
 

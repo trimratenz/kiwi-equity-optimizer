@@ -21,8 +21,8 @@ export function MarketRateComparisonStep({
   const differenceLabel = selectedBankName ? `${selectedBankName} vs your rate` : "Average vs your rate";
   const repaymentFrequencies = [...new Set(marketRateRows.map((row) => row.frequency).filter(Boolean))];
   const impactLabel =
-    repaymentFrequencies.length === 1
-      ? `Estimated ${FREQUENCY_CONFIG[repaymentFrequencies[0]].label} impact`
+    repaymentFrequencies.length === 1 && repaymentFrequencies[0] === "Monthly"
+      ? "Estimated monthly impact"
       : "Estimated repayment impact";
 
   return (
@@ -105,7 +105,9 @@ export function MarketRateComparisonStep({
                 </td>
                 <td className="p-3 align-top">
                   <p className="font-bold">{row.lowestRate === null ? "Unavailable" : percent(row.lowestRate)}</p>
-                  <p className="text-xs font-medium text-[#7B756E]">{row.lowestBank}</p>
+                  <p className="text-xs font-medium text-[#7B756E]">
+                    {row.lowestBanks?.length ? row.lowestBanks.join(", ") : "Unavailable"}
+                  </p>
                 </td>
                 <td className="p-3 align-top">{percent(row.currentRate)}</td>
                 <td className={`p-3 align-top font-bold ${rateTone}`}>
