@@ -8,7 +8,8 @@ export function MarketRateComparisonStep({
   marketRateRows,
   marketRates,
   selectedBankId,
-  setSelectedBankId
+  setSelectedBankId,
+  step = "Step 3"
 }) {
   const statusLabel = {
     idle: "Cached rates",
@@ -27,7 +28,7 @@ export function MarketRateComparisonStep({
 
   return (
     <StepShell
-      step="Step 3"
+      step={step}
       icon={Sparkles}
       title="How Does Each Loan Tranche Compare With the Market?"
       detail={`Each loan tranche is matched to the closest term from ${marketRates.source}. Last refreshed ${marketRates.lastRefreshed || marketRates.captured}. Leave the bank selector blank for the average, or choose one bank for a direct comparison.`}

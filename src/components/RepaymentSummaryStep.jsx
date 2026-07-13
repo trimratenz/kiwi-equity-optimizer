@@ -16,7 +16,8 @@ export function RepaymentSummaryStep({
   cashAfterRepayment,
   dtiRatio,
   dti,
-  dispatch
+  dispatch,
+  step = "Step 2"
 }) {
   const frequencyLabel = primaryFrequency;
   const totalRepaymentLabel = repaymentFrequencyLabel || frequencyLabel;
@@ -41,7 +42,7 @@ export function RepaymentSummaryStep({
 
   return (
     <StepShell
-      step="Step 2"
+      step={step}
       icon={Banknote}
       title="What am I paying now?"
       detail="Start here if you simply need to know the repayment, total cost, and what remains after paying the mortgage."

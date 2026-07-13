@@ -4,6 +4,7 @@ import { Banknote, CalendarClock, Home, RefreshCw, SlidersHorizontal } from "luc
 import "./index.css";
 import { submitLeadPayload, trackEvent } from "./analyticsClient";
 import { fetchOcrSnapshot } from "./ocrApi";
+import { getVisibleStepLabels } from "./visibleSteps";
 import { LoanBalanceStep } from "./components/LoanBalanceStep";
 import { ExecutiveSummaryLeadStep } from "./components/ExecutiveSummaryLeadStep";
 import { MarketRateComparisonStep } from "./components/MarketRateComparisonStep";
@@ -268,12 +269,11 @@ function App() {
       tranche.termYears > 0 &&
       tranche.hasFrequency &&
       tranche.type &&
-      (tranche.type === "Variable" || tranche.fixedMonths >= 0) &&
+      (tranche.type === "Floating" || tranche.fixedMonths >= 0) &&
       !tranche.fixedTermTooLong &&
       !tranche.repaymentValidationError
   );
   const setupComplete = loanAmount > 0 && allTranchesComplete;
-  const shouldShowRefix = setupComplete && (loanSituation === "fixed_only" || loanSituation === "mixed");
 
   const loan = useMemo(() => weightedLoanSnapshot(mathTranches, "Monthly"), [mathTranches]);
   const modelRate = loan.weightedRate || 0;
@@ -310,10 +310,16 @@ function App() {
       })),
     [mathTranches, normalizedTranches]
   );
+  const fixedForecastTranches = useMemo(
+    () => forecastTranches.filter((tranche) => tranche.type === "Fixed"),
+    [forecastTranches]
+  );
+  const shouldShowRefix = setupComplete && fixedForecastTranches.length > 0;
+  const visibleSteps = getVisibleStepLabels(shouldShowRefix);
   const refixScenarioView = useMemo(
     () =>
       buildRefixScenarioView({
-        tranches: forecastTranches,
+        tranches: fixedForecastTranches,
         selectedTrancheId: selectedForecastTrancheId,
         selectedTermMonths: selectedForecastTermMonths,
         fallbackFrequency: primaryFrequency,
@@ -325,7 +331,7 @@ function App() {
         ocrSnapshot
       }),
     [
-      forecastTranches,
+      fixedForecastTranches,
       selectedForecastTrancheId,
       selectedForecastTermMonths,
       primaryFrequency,
@@ -383,12 +389,12 @@ function App() {
         principalValue: hasFixedEndPayments ? currency(remainingFixedPayments.principal) : currency(effectiveLoan),
         principalSub: hasFixedEndPayments
           ? `${percent(principalShare, 0)} of payments go toward principal`
-          : "Variable balance available to compare",
+          : "Floating balance available to compare",
         interestLabel: hasFixedEndPayments ? "Remaining Interest" : "Current Rate",
         interestValue: hasFixedEndPayments ? currency(remainingFixedPayments.interest) : percent(modelRate),
         interestSub: hasFixedEndPayments
           ? `${percent(interestShare, 0)} of payments go toward interest`
-          : "Weighted current variable rate",
+          : "Weighted current floating rate",
         totalLabel: hasFixedEndPayments ? "Total P&I to Fixed End" : "Fixing Status",
         totalValue: hasFixedEndPayments ? currency(remainingFixedPayments.total) : "Ready now",
         totalSub: hasFixedEndPayments
@@ -405,13 +411,13 @@ function App() {
     const total = fixedPaymentRow?.total ?? 0;
     const principalShare = total > 0 ? (principal / total) * 100 : 0;
     const interestShare = total > 0 ? (interest / total) * 100 : 0;
-    const isVariable = tranche?.type === "Variable";
+    const isFloating = tranche?.type === "Floating";
     const fixedTermSummary =
       tranche?.type === "Fixed"
         ? `Fixed term: ${monthsLabel(tranche.fixedTermMonths)} | Time remaining: ${monthsLabel(
             tranche.fixedMonths
           )} | Estimated end date: ${displayDate(addMonthsToDate(CALCULATION_AS_OF_DATE, tranche.fixedMonths))}`
-        : "Variable rate | No fixed term end date";
+        : "Floating rate | No fixed term end date";
 
     return {
       title: `Loan Tranche ${tranche?.index ?? 1}`,
@@ -419,23 +425,23 @@ function App() {
       repaymentLabel: `${tranche?.frequency ?? primaryFrequency} Repayment`,
       repaymentValue: currency(paymentRow?.repayment ?? 0),
       repaymentSub: `${tranche?.type ?? "Loan Tranche"}; ${tranche?.termYears ?? modelYears} yr term`,
-      principalLabel: isVariable ? "Current Balance" : "Remaining Principal",
-      principalValue: isVariable ? currency(tranche?.amount ?? 0) : currency(principal),
-      principalSub: isVariable
-        ? "Variable balance available to compare"
+      principalLabel: isFloating ? "Current Balance" : "Remaining Principal",
+      principalValue: isFloating ? currency(tranche?.amount ?? 0) : currency(principal),
+      principalSub: isFloating
+        ? "Floating balance available to compare"
         : total > 0
           ? `${percent(principalShare, 0)} of payments go toward principal`
           : "No fixed-term period selected",
-      interestLabel: isVariable ? "Current Rate" : "Remaining Interest",
-      interestValue: isVariable ? percent(tranche?.rate ?? 0) : currency(interest),
-      interestSub: isVariable
-        ? "Current floating or variable rate"
+      interestLabel: isFloating ? "Current Rate" : "Remaining Interest",
+      interestValue: isFloating ? percent(tranche?.rate ?? 0) : currency(interest),
+      interestSub: isFloating
+        ? "Current floating rate"
         : total > 0
           ? `${percent(interestShare, 0)} of payments go toward interest`
           : "No fixed-term interest window",
-      totalLabel: isVariable ? "Fixing Status" : "Total P&I to Fixed End",
-      totalValue: isVariable ? "Ready now" : currency(total),
-      totalSub: isVariable
+      totalLabel: isFloating ? "Fixing Status" : "Total P&I to Fixed End",
+      totalValue: isFloating ? "Ready now" : currency(total),
+      totalSub: isFloating
         ? "Compare fixed-rate options from today"
         : total > 0
           ? "Principal + interest before this fixed term ends"
@@ -488,7 +494,7 @@ function App() {
     return forecastTranches.map((tranche) => {
     const targetMonths = tranche.type === "Fixed" ? tranche.fixedTermMonths || tranche.fixedMonths : 0;
     const comparableRates = marketRates.rates.filter((rate) =>
-      tranche.type === "Variable" ? marketTermMonths(rate.term) === 0 : marketTermMonths(rate.term) > 0
+      tranche.type === "Floating" ? marketTermMonths(rate.term) === 0 : marketTermMonths(rate.term) > 0
     );
     const closestRate =
       comparableRates
@@ -515,7 +521,7 @@ function App() {
       type: tranche.type,
       balance: tranche.amount,
       frequency: tranche.frequency,
-      fixedTermLabel: tranche.type === "Fixed" ? monthsLabel(targetMonths) : "Variable",
+      fixedTermLabel: tranche.type === "Fixed" ? monthsLabel(targetMonths) : "Floating",
       marketTerm: closestRate.term,
       marketRate: comparisonRate,
       comparisonSource,
@@ -533,7 +539,7 @@ function App() {
   const averageMarketRateRows = selectedMarketBankId ? buildMarketRateRows() : marketRateRows;
   const trancheForecasts = useMemo(
     () =>
-      forecastTranches.map((tranche) => {
+      fixedForecastTranches.map((tranche) => {
         const currentRepayment = tranchesWithPayments.find((item) => item.id === tranche.id)?.repayment ?? 0;
         const forecastOptions = forecastRefixRows({
           principal: tranche.amount,
@@ -558,12 +564,9 @@ function App() {
           type: tranche.type,
           currentRate: tranche.rate,
           frequency: tranche.frequency,
-          fixedTermLabel: tranche.type === "Fixed" ? monthsLabel(tranche.fixedMonths) : "Variable",
+          fixedTermLabel: monthsLabel(tranche.fixedMonths),
           refixPointLabel: selectedOption?.refixPointLabel ?? "now",
-          fixedTermEnd:
-            tranche.type === "Fixed"
-              ? displayDate(addMonthsToDate(CALCULATION_AS_OF_DATE, tranche.fixedMonths))
-              : "Available now",
+          fixedTermEnd: displayDate(addMonthsToDate(CALCULATION_AS_OF_DATE, tranche.fixedMonths)),
           forecastOcr: selectedOption?.forecastOcr ?? 0,
           estimatedBalanceAtRefix: tranche.estimatedBalanceAtRefix,
           balanceAtRefixInput: tranche.balanceAtRefixInput,
@@ -574,9 +577,9 @@ function App() {
           scenarios: selectedOption?.scenarios ?? []
         };
       }),
-    [forecastTranches, marketRates.rates, marketRates.snapshotId, ocrSnapshot, selectedForecastTermMonths, tranchesWithPayments]
+    [fixedForecastTranches, marketRates.rates, marketRates.snapshotId, ocrSnapshot, selectedForecastTermMonths, tranchesWithPayments]
   );
-  const variableOnly = forecastTranches.length > 0 && forecastTranches.every((tranche) => tranche.type === "Variable");
+  const floatingOnly = forecastTranches.length > 0 && forecastTranches.every((tranche) => tranche.type === "Floating");
   const averageFixedRates = marketRates.rates.filter((rate) => marketTermMonths(rate.term) > 0);
   const summaryContent = useMemo(
     () =>
@@ -960,6 +963,7 @@ function App() {
           updateTranche={updateTranche}
           addTranche={addTranche}
           removeTranche={removeTranche}
+          step={visibleSteps.loanDetails}
         />
 
         {setupComplete && (
@@ -1050,6 +1054,7 @@ function App() {
               dtiRatio={dtiRatio}
               dti={dti}
               dispatch={dispatch}
+              step={visibleSteps.repayment}
             />
 
             <MarketRateComparisonStep
@@ -1058,11 +1063,12 @@ function App() {
               marketRates={marketRates}
               selectedBankId={selectedMarketBankId}
               setSelectedBankId={setSelectedMarketBankId}
+              step={visibleSteps.marketComparison}
             />
 
             {shouldShowRefix && <RateStressStep
               forecastRows={forecastRows}
-              forecastTranches={forecastTranches}
+              forecastTranches={fixedForecastTranches}
               selectedForecastTranche={selectedForecastTranche}
               selectedForecastTrancheId={selectedForecastTrancheId}
               selectedForecastFrequency={selectedForecastFrequency}
@@ -1073,6 +1079,7 @@ function App() {
               setSelectedForecastTermMonths={setSelectedForecastTermMonths}
               setSelectedForecastTrancheId={setSelectedForecastTrancheId}
               updateTranche={updateTranche}
+              step={visibleSteps.ocrForecast}
             />}
 
             <OptimizationStep
@@ -1085,6 +1092,7 @@ function App() {
               summary={summary}
               dispatch={dispatch}
               nudgeExtra={nudgeExtra}
+              step={visibleSteps.optimization}
             />
 
             <ExecutiveSummaryLeadStep
@@ -1101,7 +1109,7 @@ function App() {
               marketRateRows={marketRateRows}
               trancheForecasts={trancheForecasts}
               averageFixedRates={averageFixedRates}
-              variableOnly={variableOnly}
+              floatingOnly={floatingOnly}
               onSubmitLead={handleLeadCapture}
               onPdfRequested={handlePdfGeneration}
               onSummaryExported={handleSummaryExported}

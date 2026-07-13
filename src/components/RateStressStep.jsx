@@ -21,18 +21,18 @@ export function RateStressStep({
   selectedForecastTermMonths,
   setSelectedForecastTermMonths,
   setSelectedForecastTrancheId,
-  updateTranche
+  updateTranche,
+  step = "Step 4"
 }) {
   const selectedTerm =
     selectedForecastRow ??
     forecastRows.find((row) => row.months === selectedForecastTermMonths) ??
     forecastRows.find((row) => row.months === 12) ??
     forecastRows[0];
-  const isVariableLoanPart = selectedForecastTranche?.type === "Variable";
 
   return (
     <StepShell
-      step="Step 4"
+      step={step}
       icon={AlertTriangle}
       title="What could I pay when I re-fix?"
       detail="Pick the loan tranche and the new fixed term. TrimRate uses the RBNZ OCR forecast for the date your fixed term ends, then shows three repayment outlooks together."
@@ -69,18 +69,14 @@ export function RateStressStep({
               sub={`Original part: ${currency(selectedForecastTranche.originalBalance)}`}
             />
             <Stat
-              label={isVariableLoanPart ? "Can fix from" : "Fixed ends in"}
-              value={isVariableLoanPart ? "today" : monthsLabel(selectedForecastTranche.fixedMonths)}
-              sub={
-                selectedForecastTranche.type === "Fixed"
-                  ? `Current fixed term: ${monthsLabel(selectedForecastTranche.fixedTermMonths)}`
-                  : "Floating or variable loan tranche"
-              }
+              label="Fixed ends in"
+              value={monthsLabel(selectedForecastTranche.fixedMonths)}
+              sub={`Current fixed term: ${monthsLabel(selectedForecastTranche.fixedTermMonths)}`}
             />
             <Stat
-              label={isVariableLoanPart ? "Balance if fixed today" : "Balance at re-fix"}
+              label="Balance at re-fix"
               value={currency(selectedTerm?.remainingBalance ?? selectedForecastTranche.resolvedBalanceAtRefix ?? selectedForecastTranche.amount)}
-              sub={isVariableLoanPart ? "Uses the current balance" : "Projected from the current balance and repayment"}
+              sub="Projected from the current balance and repayment"
             />
             <Stat
               label={`Current ${FREQUENCY_CONFIG[selectedForecastFrequency].label} repayment`}
@@ -126,7 +122,7 @@ export function RateStressStep({
                   Showing scenario for {scenarioLabel ?? "Loan details"}
                 </p>
                 <h3 className="mt-2 text-2xl font-black text-[#1B2A22]">
-                  {selectedTerm.label} fixed {isVariableLoanPart ? "from today" : `in ${selectedTerm.refixPointLabel}`}
+                  {selectedTerm.label} fixed in {selectedTerm.refixPointLabel}
                 </h3>
                 <p className="mt-1 text-sm font-medium leading-6 text-[#7B756E]">
                   RBNZ OCR forecast at that point is {percent(selectedTerm.forecastOcr)}. Current Five-bank average for a{" "}

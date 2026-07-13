@@ -67,7 +67,7 @@ export function ExecutiveSummaryLeadStep({
   marketRateRows,
   trancheForecasts,
   averageFixedRates,
-  variableOnly,
+  floatingOnly,
   onSubmitLead,
   onSummaryExported,
   resetVersion
@@ -228,9 +228,9 @@ export function ExecutiveSummaryLeadStep({
 
             <section>
               <h3 className="text-base font-black text-[#1B2A22]">
-                {variableOnly ? "Average fixed rates to compare" : "Rate comparison by loan tranche"}
+                {floatingOnly ? "Average fixed rates to compare" : "Rate comparison by loan tranche"}
               </h3>
-              {variableOnly ? (
+              {floatingOnly ? (
                 <>
                   <div className="mt-3 overflow-x-auto rounded-lg border border-[#E2DDD5] bg-white">
                     <table className="w-full min-w-[520px] text-left text-sm">
@@ -243,7 +243,7 @@ export function ExecutiveSummaryLeadStep({
                     </table>
                   </div>
                   <p className="mt-3 text-xs leading-5 text-[#7B756E]">
-                    Because your loan is variable, you may be able to compare available fixed-rate options without waiting for a fixed term to end. Check with your lender.
+                    Because your loan is floating, you may be able to compare available fixed-rate options without waiting for a fixed term to end. Check with your lender.
                   </p>
                 </>
               ) : (
@@ -293,6 +293,7 @@ export function ExecutiveSummaryLeadStep({
               )}
             </section>
 
+            {trancheForecasts.length > 0 && (
             <section>
               <h3 className="text-base font-black text-[#1B2A22]">OCR forecast repayment scenarios</h3>
               <p className="mt-1 text-sm leading-6 text-[#7B756E]">These scenarios show how each tranche&apos;s repayment may change under optimistic, base, and conservative rate assumptions.</p>
@@ -364,6 +365,7 @@ export function ExecutiveSummaryLeadStep({
                 Forecast repayments use the current market rate for the selected fixed term, adjusted for the OCR forecast movement with scenario-specific pass-through and rate buffers. Actual lender rates may move differently and may include margins, discounts, fees, or special offers.
               </p>
             </section>
+            )}
           </div>
 
           <p className="mt-4 rounded-lg bg-[#F4FAF6] p-3 text-sm font-semibold leading-6 text-[#3A6047]">

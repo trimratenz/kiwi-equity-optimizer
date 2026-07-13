@@ -13,11 +13,12 @@ export function OptimizationStep({
   netCash,
   summary,
   dispatch,
-  nudgeExtra
+  nudgeExtra,
+  step = "Step 5"
 }) {
   return (
     <StepShell
-      step="Step 5"
+      step={step}
       icon={PiggyBank}
       title="What changes could improve the numbers?"
       detail="Model one controlled change at a time: extra repayments, interest-only period, or loan structure."

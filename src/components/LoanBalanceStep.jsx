@@ -13,13 +13,14 @@ export function LoanBalanceStep({
   dispatch,
   updateTranche,
   addTranche,
-  removeTranche
+  removeTranche,
+  step = "Step 1"
 }) {
   const isExistingLoan = hasExistingLoan === "yes";
 
   return (
     <section className="rounded-xl border border-[#E2DDD5] bg-white p-5 shadow-[0_18px_50px_rgba(27,42,34,0.07)] sm:p-8">
-      <p className="text-xs font-black uppercase tracking-wide text-[#3A6047]">Step 1</p>
+      <p className="text-xs font-black uppercase tracking-wide text-[#3A6047]">{step}</p>
       <div className="mt-2 grid gap-5">
         <div>
           <h2 className="text-3xl font-black text-[#1B2A22] sm:text-4xl">How much home loan do you have?</h2>
@@ -38,8 +39,8 @@ export function LoanBalanceStep({
               }}
               options={[
                 { value: "fixed_only", label: "I have fixed home loan only" },
-                { value: "variable_only", label: "I have variable/floating home loan only" },
-                { value: "mixed", label: "I have both fixed and variable/floating home loans" },
+                { value: "floating_only", label: "I have a floating home loan only" },
+                { value: "mixed", label: "I have both fixed and floating home loans" },
                 { value: "no_home_loan", label: "I do not have a home loan yet" }
               ]}
             />
@@ -180,13 +181,13 @@ export function LoanBalanceStep({
                         onChange={(value) =>
                           updateTranche(tranche.id, {
                             type: value,
-                            fixedTermMonths: value === "Variable" ? "0" : tranche.fixedTermMonths || "12",
-                            fixedMonths: value === "Variable" ? "0" : tranche.fixedMonths || "12"
+                            fixedTermMonths: value === "Floating" ? "0" : tranche.fixedTermMonths || "12",
+                            fixedMonths: value === "Floating" ? "0" : tranche.fixedMonths || "12"
                           })
                         }
                         options={[
                           { value: "Fixed", label: "Fixed" },
-                          { value: "Variable", label: "Variable" }
+                          { value: "Floating", label: "Floating" }
                         ]}
                       />
                     </Field>
