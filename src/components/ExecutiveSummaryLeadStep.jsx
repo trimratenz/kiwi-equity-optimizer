@@ -318,9 +318,9 @@ export function ExecutiveSummaryLeadStep({
                 })}
               </div>
               <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                <table className="w-full min-w-[980px] text-left text-sm">
+                <table className="w-full min-w-[1040px] text-left text-sm">
                   <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                    <tr><th className="p-3">Loan part</th><th className="p-3">Current repayment</th><th className="p-3">Optimistic</th><th className="p-3">Base</th><th className="p-3">Conservative</th><th className="p-3">Scenario range</th></tr>
+                    <tr><th className="p-3">Loan part</th><th className="p-3">Frequency</th><th className="p-3">Current repayment</th><th className="p-3">Optimistic</th><th className="p-3">Base</th><th className="p-3">Conservative</th><th className="p-3">Scenario range</th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 text-slate-900">
                     {trancheForecasts.map((row) => {
@@ -331,11 +331,12 @@ export function ExecutiveSummaryLeadStep({
                       const forecastRepayments = row.scenarios.map((scenario) => scenario.repayment);
                       return <tr key={row.id}>
                         <td className="p-3"><p className="font-black">Tranche {row.index}</p><p className="text-xs font-medium text-[#7B756E]">Rolling over {row.refixPointLabel === "now" ? "now" : `in ${termLabel(row.refixPointLabel)}`}</p><p className="mt-1 text-xs font-medium text-[#7B756E]">{row.fixedTermEnd} · OCR {percent(row.forecastOcr)}</p></td>
-                        <td className="p-3"><p className="font-bold">{repaymentLabel(row.currentRepayment, row.frequency)}</p><p className="mt-1 text-xs font-medium text-slate-500">Current rate {percent(row.currentRate)}</p></td>
-                        <td className="p-3">{optimistic ? <><p className="font-bold">{repaymentLabel(optimistic.repayment, row.frequency)}</p><p className="mt-1 text-xs text-slate-500">{optimistic.repaymentChange >= 0 ? "+" : "-"}{currency(Math.abs(optimistic.repaymentChange))} from current</p></> : "Not available"}</td>
-                        <td className="p-3">{base ? <><p className="font-bold">{repaymentLabel(base.repayment, row.frequency)}</p><p className="mt-1 text-xs text-slate-500">{base.repaymentChange >= 0 ? "+" : "-"}{currency(Math.abs(base.repaymentChange))} from current</p></> : "Not available"}</td>
-                        <td className="p-3">{conservative ? <><p className="font-bold">{repaymentLabel(conservative.repayment, row.frequency)}</p><p className="mt-1 text-xs text-slate-500">{conservative.repaymentChange >= 0 ? "+" : "-"}{currency(Math.abs(conservative.repaymentChange))} from current</p></> : "Not available"}</td>
-                        <td className="p-3 font-bold">{forecastRates.length ? <><p>{percent(Math.min(...forecastRates))} to {percent(Math.max(...forecastRates))}</p><p className="mt-1 text-xs font-medium">{repaymentLabel(Math.min(...forecastRepayments), row.frequency)} to {repaymentLabel(Math.max(...forecastRepayments), row.frequency)}</p></> : "Not available"}</td>
+                        <td className="p-3 font-medium text-slate-700">{row.frequency}</td>
+                        <td className="p-3"><p className="font-bold">{currency(row.currentRepayment)}</p><p className="mt-1 text-xs font-medium text-slate-500">Current rate {percent(row.currentRate)}</p></td>
+                        <td className="p-3">{optimistic ? <><p className="font-bold">{currency(optimistic.repayment)}</p><p className="mt-1 text-xs text-slate-500">{optimistic.repaymentChange >= 0 ? "+" : "-"}{currency(Math.abs(optimistic.repaymentChange))} from current</p></> : "Not available"}</td>
+                        <td className="p-3">{base ? <><p className="font-bold">{currency(base.repayment)}</p><p className="mt-1 text-xs text-slate-500">{base.repaymentChange >= 0 ? "+" : "-"}{currency(Math.abs(base.repaymentChange))} from current</p></> : "Not available"}</td>
+                        <td className="p-3">{conservative ? <><p className="font-bold">{currency(conservative.repayment)}</p><p className="mt-1 text-xs text-slate-500">{conservative.repaymentChange >= 0 ? "+" : "-"}{currency(Math.abs(conservative.repaymentChange))} from current</p></> : "Not available"}</td>
+                        <td className="p-3 font-bold">{forecastRates.length ? <><p>{percent(Math.min(...forecastRates))} to {percent(Math.max(...forecastRates))}</p><p className="mt-1 text-xs font-medium">{currency(Math.min(...forecastRepayments))} to {currency(Math.max(...forecastRepayments))}</p></> : "Not available"}</td>
                       </tr>;
                     })}
                   </tbody>
