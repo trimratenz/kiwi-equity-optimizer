@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Banknote, CalendarClock, Home, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { ArrowRight, Banknote, CalendarClock, Check, Home, RefreshCw, SlidersHorizontal } from "lucide-react";
 import "./index.css";
 import { submitLeadPayload, trackEvent } from "./analyticsClient";
 import { fetchOcrSnapshot } from "./ocrApi";
@@ -910,28 +910,26 @@ function App() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F7F5F0] text-[#1B2A22]">
-      <header className="border-b border-[#E2DDD5] bg-white/95">
-        <div className="mx-auto grid max-w-5xl gap-4 px-4 py-5 sm:px-6 lg:grid-cols-[1fr_auto] lg:items-center lg:px-8">
+    <main className="min-h-screen bg-[#F7F8FA] text-slate-950">
+      <header className="border-b border-slate-200/80 bg-white/90 backdrop-blur">
+        <div className="mx-auto grid max-w-7xl gap-4 px-5 py-4 sm:px-6 lg:grid-cols-[1fr_auto] lg:items-center lg:px-8">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-[#3A6047]/10 p-2 text-[#3A6047]">
+            <div className="rounded-xl bg-[#092B63] p-2 text-white shadow-lg shadow-blue-950/15">
               <Home size={24} aria-hidden="true" />
             </div>
             <div>
-              <h1 className="text-2xl font-black sm:text-3xl">TrimRate.co.nz</h1>
-              <p className="mt-1 max-w-3xl text-sm leading-5 text-[#7B756E]">
-                Built by Kiwis for Kiwis, TrimRate shows mortgage repayments, market-rate comparisons, and re-fix scenarios in one place.
-              </p>
+              <h1 className="text-lg font-black tracking-tight text-[#092B63] sm:text-xl">TrimRate</h1>
+              <p className="text-xs font-medium text-slate-500">Mortgage intelligence, made clear.</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <a href="/calculator" className="inline-flex h-11 items-center rounded-lg px-3 text-sm font-bold text-[#1B2A22] hover:bg-[#F7F5F0]">Calculator</a>
-            <a href="/info" className="inline-flex h-11 items-center rounded-lg px-3 text-sm font-bold text-[#1B2A22] hover:bg-[#F7F5F0]">Info</a>
-            <a href="/contact" className="inline-flex h-11 items-center rounded-lg px-3 text-sm font-bold text-[#1B2A22] hover:bg-[#F7F5F0]">Contact</a>
+            <a href="/calculator" className="inline-flex h-10 items-center rounded-lg px-3 text-sm font-bold text-slate-700 hover:bg-slate-100">Calculator</a>
+            <a href="/info" className="inline-flex h-10 items-center rounded-lg px-3 text-sm font-bold text-slate-700 hover:bg-slate-100">How it works</a>
+            <a href="/contact" className="inline-flex h-10 items-center rounded-lg px-3 text-sm font-bold text-slate-700 hover:bg-slate-100">Contact</a>
             <button
               type="button"
               onClick={resetTool}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#E2DDD5] bg-white px-4 text-sm font-bold text-[#1B2A22] shadow-sm hover:border-[#3A6047]/70 hover:text-[#3A6047]"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-[#092B63] focus:outline-none focus:ring-2 focus:ring-blue-500/25"
             >
               <RefreshCw size={16} aria-hidden="true" />
               Reset
@@ -940,8 +938,30 @@ function App() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-        <LoanBalanceStep
+      <div className="relative overflow-hidden border-b border-slate-200 bg-white">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-80 bg-[radial-gradient(circle_at_12%_10%,rgba(69,132,255,0.18),transparent_32%),radial-gradient(circle_at_85%_0%,rgba(19,74,150,0.15),transparent_30%)]" />
+        <section className="relative mx-auto max-w-7xl px-5 py-14 sm:px-6 sm:py-20 lg:px-8">
+          <div className="max-w-3xl">
+            <p className="mb-4 text-xs font-extrabold uppercase tracking-[0.18em] text-blue-700">New Zealand mortgage dashboard</p>
+            <h2 className="max-w-2xl text-4xl font-black tracking-[-0.04em] text-[#092B63] sm:text-5xl">Mortgage clarity in under 2 minutes.</h2>
+            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">Compare your current repayments, market rates, cash flow, and OCR forecast scenarios—without the spreadsheet.</p>
+            <a href="#assessment" className="mt-8 inline-flex h-12 items-center gap-2 rounded-xl bg-[#092B63] px-5 text-sm font-extrabold text-white shadow-lg shadow-blue-950/20 transition hover:bg-[#103b80] focus:outline-none focus:ring-4 focus:ring-blue-500/25">
+              Start assessment <ArrowRight size={17} aria-hidden="true" />
+            </a>
+          </div>
+          <div className="mt-10 grid gap-3 sm:grid-cols-3">
+            {[
+              ["Transparent by design", "No financial advice—just clear calculations."],
+              ["Built for New Zealand", "Mortgage terms, repayment rhythms, and OCR context."],
+              ["Your details stay useful", "See assumptions behind every comparison."]
+            ].map(([title, detail]) => <div key={title} className="rounded-2xl border border-slate-200/90 bg-white/80 p-4 shadow-sm backdrop-blur"><Check className="mb-3 text-blue-700" size={18} aria-hidden="true" /><p className="font-bold text-slate-900">{title}</p><p className="mt-1 text-sm leading-5 text-slate-500">{detail}</p></div>)}
+          </div>
+        </section>
+      </div>
+
+      <div id="assessment" className="mx-auto max-w-7xl px-5 py-8 sm:px-6 sm:py-10 lg:px-8">
+        <div className="space-y-6">
+          <LoanBalanceStep
           hasExistingLoan={hasExistingLoan}
           isSplitLoan={isSplitLoan}
           loanStructure={loanStructure}
@@ -952,16 +972,16 @@ function App() {
           addTranche={addTranche}
           removeTranche={removeTranche}
           step={visibleSteps.loanDetails}
-        />
+          />
 
-        {setupComplete && (
+          {setupComplete && (
           <section className="space-y-5">
-            <div className="rounded-xl border border-[#E2DDD5] bg-white p-4 shadow-[0_12px_34px_rgba(27,42,34,0.06)]">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-wide text-[#3A6047]">Repayment view</p>
-                  <h2 className="mt-1 text-xl font-black text-[#1B2A22]">{selectedSummaryDetails.title}</h2>
-                  <p className="mt-1 text-sm font-medium text-[#7B756E]">{selectedSummaryDetails.description}</p>
+                  <p className="text-xs font-black uppercase tracking-[0.12em] text-blue-700">Repayment view</p>
+                  <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">{selectedSummaryDetails.title}</h2>
+                  <p className="mt-1 text-sm font-medium text-slate-500">{selectedSummaryDetails.description}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -969,8 +989,8 @@ function App() {
                     onClick={() => setSelectedSummaryScope("total")}
                     className={`min-h-10 rounded-lg px-3 text-sm font-black transition ${
                       selectedSummaryScope === "total"
-                        ? "bg-[#3A6047] text-white shadow-sm"
-                        : "border border-[#E2DDD5] bg-[#F7F5F0] text-[#7B756E] hover:bg-white hover:text-[#1B2A22]"
+                        ? "bg-[#092B63] text-white shadow-sm"
+                        : "border border-slate-200 bg-slate-50 text-slate-500 hover:bg-white hover:text-slate-900"
                     }`}
                   >
                     Total mortgage
@@ -982,8 +1002,8 @@ function App() {
                       onClick={() => setSelectedSummaryScope(tranche.id)}
                       className={`min-h-10 rounded-lg px-3 text-sm font-black transition ${
                         selectedSummaryScope === tranche.id
-                          ? "bg-[#3A6047] text-white shadow-sm"
-                          : "border border-[#E2DDD5] bg-[#F7F5F0] text-[#7B756E] hover:bg-white hover:text-[#1B2A22]"
+                          ? "bg-[#092B63] text-white shadow-sm"
+                          : "border border-slate-200 bg-slate-50 text-slate-500 hover:bg-white hover:text-slate-900"
                       }`}
                     >
                       Part {tranche.index}
@@ -993,7 +1013,7 @@ function App() {
               </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <Stat
                 label={selectedSummaryDetails.repaymentLabel}
                 value={selectedSummaryDetails.repaymentValue}
@@ -1089,6 +1109,7 @@ function App() {
               loanAmount={loanAmount}
               currentRepayment={summary.repayment}
               cashAfterMortgage={netCash.remainingCash}
+              salaryAmount={salaryAmount}
               extraPayment={toPositive(extraPayment)}
               monthlyCost={paymentToAnnual(summary.repayment, primaryFrequency) / 12}
               dtiRatio={dtiRatio}
@@ -1103,16 +1124,17 @@ function App() {
               resetVersion={resetVersion}
             />
           </section>
-        )}
+          )}
+        </div>
       </div>
 
-      <footer className="mx-auto max-w-5xl px-4 pb-8 text-xs leading-5 text-[#7B756E] sm:px-6 lg:px-8">
+      <footer className="mx-auto max-w-7xl px-5 pb-8 text-xs leading-5 text-slate-500 sm:px-6 lg:px-8">
         Educational model only. Mortgage-rate comparisons use market data where available, while forecasts are modelling
         assumptions. Confirm final rates and tax treatment with qualified advisers before making a decision.
         <span className="mt-2 block">
-          <a className="underline hover:text-[#3A6047]" href="/privacy-policy">Privacy Policy</a>
+          <a className="underline hover:text-[#092B63]" href="/privacy-policy">Privacy Policy</a>
           <span className="px-2">·</span>
-          <a className="underline hover:text-[#3A6047]" href="/terms-of-use">Terms of Use</a>
+          <a className="underline hover:text-[#092B63]" href="/terms-of-use">Terms of Use</a>
         </span>
       </footer>
     </main>

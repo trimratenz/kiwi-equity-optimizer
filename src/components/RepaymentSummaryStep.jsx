@@ -48,7 +48,7 @@ export function RepaymentSummaryStep({
       detail="Start here if you simply need to know the repayment, total cost, and what remains after paying the mortgage."
     >
       <div className="grid gap-5">
-        <div className="grid gap-4 rounded-2xl border border-[#E2DDD5] bg-[#F7F5F0] p-4 sm:p-5 md:grid-cols-2 xl:grid-cols-6">
+        <div className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5 md:grid-cols-2 xl:grid-cols-6">
           <Stat
             label={`${totalRepaymentLabel} Repayment`}
             value={currency(repaymentPerSelectedPeriod)}
@@ -56,7 +56,7 @@ export function RepaymentSummaryStep({
             icon={Banknote}
             className="xl:col-span-3 xl:p-6"
           />
-          <div className="rounded-xl border border-[#E2DDD5] bg-white p-4 shadow-[0_12px_34px_rgba(27,42,34,0.06)] xl:col-span-3 xl:p-6">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm xl:col-span-3 xl:p-6">
             <Field
               label={`${frequencyLabel} Income`}
               hint="After-tax income"
@@ -90,21 +90,21 @@ export function RepaymentSummaryStep({
             icon={PieChart}
             className="xl:col-span-3"
           />
-          <div className="flex flex-col rounded-xl border border-[#E2DDD5] bg-white p-4 shadow-[0_12px_34px_rgba(27,42,34,0.06)] xl:col-span-3">
+          <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm xl:col-span-3">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-bold uppercase tracking-wide text-[#7B756E]">Debt to Income Scale</p>
-              <span className="rounded-lg bg-[#F7F5F0] px-2 py-1 text-xs font-black text-[#3A6047]">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Debt to Income Scale</p>
+              <span className="rounded-lg bg-blue-50 px-2 py-1 text-xs font-black text-[#092B63]">
                 {salaryAmount > 0 ? `${dtiRatio.toFixed(2)}x` : "Add income"}
               </span>
             </div>
             <div className="mt-4">
-              <div className="relative h-3 rounded-full bg-gradient-to-r from-[#3A6047] via-[#D8A344] to-[#C86A53]">
+              <div className="relative h-3 rounded-full bg-gradient-to-r from-emerald-500 via-amber-400 to-[#C86A53]">
                 <span
-                  className="absolute top-1/2 h-5 w-1 -translate-y-1/2 rounded-full bg-[#1B2A22]"
+                  className="absolute top-1/2 h-5 w-1 -translate-y-1/2 rounded-full bg-slate-900"
                   style={{ left: `calc(${dti.position}% - 2px)` }}
                 />
               </div>
-              <div className="relative mt-2 h-4 text-[10px] font-bold uppercase tracking-wide text-[#7B756E]">
+              <div className="relative mt-2 h-4 text-[10px] font-bold uppercase tracking-wide text-slate-500">
                 <span className="absolute left-0">0x</span>
                 <span className="absolute -translate-x-1/2" style={{ left: `${(5 / 7) * 100}%` }}>
                   5x
@@ -115,16 +115,16 @@ export function RepaymentSummaryStep({
                 <span className="absolute right-0">7x+</span>
               </div>
             </div>
-            <p className="mt-3 text-xs font-medium leading-5 text-[#7B756E]">{dti.detail}</p>
-            <p className="mt-auto pt-4 text-xs font-medium leading-5 text-[#7B756E]">
+            <p className="mt-3 text-xs font-medium leading-5 text-slate-500">{dti.detail}</p>
+            <p className="mt-auto pt-4 text-xs font-medium leading-5 text-slate-500">
               RBNZ: DTI compares debt with annual gross income; high-DTI lending starts above 6x for owner-occupiers and 7x for investors.
             </p>
           </div>
 
-          <div className="rounded-xl border border-[#E2DDD5] bg-white p-4 shadow-[0_12px_34px_rgba(27,42,34,0.06)] xl:col-span-3">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm xl:col-span-3">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-bold uppercase tracking-wide text-[#7B756E]">Repayment-to-Income Check</p>
-              <span className="rounded-lg bg-[#F7F5F0] px-2 py-1 text-xs font-black text-[#3A6047]">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Repayment-to-Income Check</p>
+              <span className="rounded-lg bg-blue-50 px-2 py-1 text-xs font-black text-[#092B63]">
                 {salaryAmount > 0 ? percent(monthlyRepaymentRatio, 1) : "Add income"}
               </span>
             </div>

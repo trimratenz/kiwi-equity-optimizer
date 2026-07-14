@@ -40,6 +40,7 @@ assert.deepEqual(getVisibleStepLabels(false), {
 }, "all floating loans skip OCR without a step-number gap");
 const info = readFileSync(new URL("../src/InfoPage.jsx", import.meta.url), "utf8");
 const contact = readFileSync(new URL("../src/ContactPage.jsx", import.meta.url), "utf8");
-assert.match(info, /The all-in-one mortgage calculator for Kiwis/, "Info page renders");
-assert.match(contact, /hello@trimrate\.co\.nz/, "Contact page renders");
+assert.match(info, /Mortgage clarity for New Zealand homeowners/, "Info page renders");
+assert.match(info, /Important disclaimer/, "Info page includes its disclaimer");
+assert.match(contact, /support@trimrate\.co\.nz/, "Contact page renders");
 console.log("Frontend UX test passed");

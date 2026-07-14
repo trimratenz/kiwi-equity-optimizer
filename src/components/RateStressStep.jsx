@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import {
   FREQUENCY_CONFIG,
   currency,
@@ -86,17 +86,17 @@ export function RateStressStep({
         )}
 
         {selectedTerm && (
-          <article className="rounded-xl border border-[#E2DDD5] bg-white p-5 shadow-[0_12px_34px_rgba(27,42,34,0.06)]">
+          <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="grid gap-5">
               <div>
-                <p className="text-xs font-black uppercase tracking-wide text-[#7B756E]">Selected re-fix scenario</p>
-                <p className="mt-1 text-sm font-black text-[#3A6047]">
+                <p className="text-xs font-black uppercase tracking-wide text-slate-500">Selected re-fix scenario</p>
+                <p className="mt-1 text-sm font-black text-[#092B63]">
                   Showing scenario for {scenarioLabel ?? "Loan details"}
                 </p>
-                <h3 className="mt-2 text-2xl font-black text-[#1B2A22]">
+                <h3 className="mt-2 text-2xl font-black tracking-tight text-slate-950">
                   {selectedTerm.label} fixed in {selectedTerm.refixPointLabel}
                 </h3>
-                <p className="mt-1 text-sm font-medium leading-6 text-[#7B756E]">
+                <p className="mt-1 text-sm font-medium leading-6 text-slate-500">
                   RBNZ OCR forecast at that point is {percent(selectedTerm.forecastOcr)}. Current Five-bank average for a{" "}
                   {selectedTerm.label} fixed rate is {percent(selectedTerm.marketRateToday)}.
                 </p>
@@ -107,25 +107,25 @@ export function RateStressStep({
                     key={scenario.key}
                     className={`rounded-xl border p-4 ${
                       scenario.key === "base"
-                        ? "border-[#3A6047]/50 bg-[#3A6047]/5"
+                        ? "border-blue-200 bg-blue-50/60"
                         : scenario.key === "conservative"
                           ? "border-[#C86A53]/35 bg-[#C86A53]/5"
-                          : "border-[#E2DDD5] bg-[#F7F5F0]"
+                          : "border-slate-200 bg-slate-50"
                     }`}
                   >
-                    <p className="text-xs font-black uppercase tracking-wide text-[#7B756E]">{scenario.label}</p>
-                    <p className="mt-2 text-2xl font-black text-[#1B2A22]">{currency(scenario.repayment)}</p>
-                    <p className="mt-1 text-xs font-medium text-[#7B756E]">
+                    <p className="text-xs font-black uppercase tracking-wide text-slate-500">{scenario.label}</p>
+                    <p className="mt-2 text-2xl font-black tracking-tight text-slate-950">{currency(scenario.repayment)}</p>
+                    <p className="mt-1 text-xs font-medium text-slate-500">
                       Every {FREQUENCY_CONFIG[selectedForecastFrequency].label} at {percent(scenario.forecastMortgageRate)}
                     </p>
-                    <p className={`mt-3 text-sm font-black ${scenario.repaymentChange > 0 ? "text-[#C86A53]" : "text-[#3A6047]"}`}>
+                    <p className={`mt-3 text-sm font-black ${scenario.repaymentChange > 0 ? "text-[#C86A53]" : "text-emerald-700"}`}>
                       {scenario.repaymentChange >= 0 ? "+" : ""}
                       {currency(scenario.repaymentChange)} vs now
                     </p>
                   </div>
                 ))}
               </div>
-              <div className="rounded-lg border border-[#E2DDD5] bg-[#F7F5F0] p-4 text-sm leading-6 text-[#7B756E]">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-500">
                 <p>
                   OCR snapshot:{" "}
                   {selectedTerm.forecastSourceUrl ? (
@@ -133,7 +133,7 @@ export function RateStressStep({
                       href={selectedTerm.forecastSourceUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="font-bold text-[#3A6047] underline-offset-2 hover:underline"
+                      className="font-bold text-[#092B63] underline-offset-2 hover:underline"
                     >
                       {selectedTerm.forecastSource}
                     </a>
@@ -146,7 +146,7 @@ export function RateStressStep({
                       href={selectedTerm.currentOcrSourceUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="font-bold text-[#3A6047] underline-offset-2 hover:underline"
+                      className="font-bold text-[#092B63] underline-offset-2 hover:underline"
                     >
                       Current OCR {percent(selectedTerm.currentOcr)}
                     </a>
@@ -161,12 +161,8 @@ export function RateStressStep({
           </article>
         )}
 
-        <div className="grid gap-3 rounded-lg bg-[#F7F5F0] p-4 text-sm leading-6 text-[#7B756E] md:grid-cols-[1fr_auto] md:items-center">
+        <div className="rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-500">
           <p>{USER_RATE_DATA_NOTICE}</p>
-          <div className="inline-flex items-center gap-2 rounded-lg border border-[#E2DDD5] bg-white px-3 py-2 text-xs font-black uppercase tracking-wide text-[#3A6047]">
-            <RefreshCw size={14} aria-hidden="true" />
-            Snapshot-based
-          </div>
         </div>
       </div>
     </StepShell>

@@ -60,6 +60,7 @@ export function ExecutiveSummaryLeadStep({
   loanAmount,
   currentRepayment,
   cashAfterMortgage,
+  salaryAmount,
   extraPayment,
   monthlyCost,
   dtiRatio,
@@ -77,6 +78,12 @@ export function ExecutiveSummaryLeadStep({
   const [submitted, setSubmitted] = useState(false);
   const [consentTimestamp, setConsentTimestamp] = useState("");
   const [leadFormStarted, setLeadFormStarted] = useState(false);
+  const primaryMarketRow = marketRateRows[0];
+  const baseScenario = trancheForecasts[0]?.scenarios?.find((scenario) => scenario.key === "base");
+  const incomeKnown = Number(salaryAmount) > 0;
+  const rateDifference = primaryMarketRow?.difference ?? 0;
+  const repaymentDifference = primaryMarketRow?.repaymentDifference ?? 0;
+  const ratePosition = Math.abs(rateDifference) < 0.05 ? "in line with" : rateDifference > 0 ? "above" : "below";
 
   useEffect(() => {
     setValues(EMPTY_FORM);
@@ -188,56 +195,61 @@ export function ExecutiveSummaryLeadStep({
   }
 
   return (
-    <section className="rounded-xl border border-[#E2DDD5] bg-white p-5 shadow-[0_18px_50px_rgba(27,42,34,0.07)] sm:p-7">
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)] sm:p-7">
       <div className="mb-5 flex items-start gap-3">
-        <div className="rounded-lg bg-[#3A6047]/10 p-2 text-[#3A6047]">
+        <div className="rounded-xl bg-blue-50 p-2 text-[#092B63]">
           <ClipboardCheck size={20} aria-hidden="true" />
         </div>
         <div>
-          <p className="text-xs font-black uppercase tracking-wide text-[#3A6047]">Home loan summary</p>
-          <h2 className="text-xl font-black text-[#1B2A22] sm:text-2xl">Your summary</h2>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-[#7B756E]">
+          <p className="text-xs font-black uppercase tracking-[0.12em] text-blue-700">Mortgage intelligence report</p>
+          <h2 className="text-xl font-black tracking-tight text-slate-950 sm:text-2xl">Your summary</h2>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
             Here&apos;s a simple snapshot of your current loan position and how your repayments may change under different rate scenarios.
           </p>
         </div>
       </div>
 
       <div className="grid gap-5">
-        <div id="home-loan-summary" className="rounded-xl border border-[#E2DDD5] bg-[#FFFEFC] p-4 sm:p-5">
+        <div id="home-loan-summary" className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
           <div className="print-heading">
             <p>TrimRate.co.nz</p>
             <h1>Home Loan Summary</h1>
           </div>
 
-          <div className="grid gap-5">
+          <div className="grid gap-7">
             <section>
-              <h3 className="text-base font-black text-[#1B2A22]">Current position</h3>
-              <ul className="mt-3 grid gap-2 text-sm leading-6 text-[#4F5A52] sm:grid-cols-2">
-                <li><strong>Current loan balance:</strong> {currency(loanAmount)}</li>
-                <li><strong>Current repayment:</strong> {currency(currentRepayment)}</li>
-                <li><strong>Cash after mortgage:</strong> {currency(cashAfterMortgage)}</li>
-                {extraPayment > 0 && <li><strong>Top-up:</strong> {currency(extraPayment)}</li>}
-                <li><strong>Monthly cost:</strong> {currency(monthlyCost)}</li>
-                <li><strong>DTI:</strong> {dtiRatio.toFixed(2)}x</li>
-                <li><strong>Repayment-to-income ratio:</strong> {percent(repaymentToIncome, 1)}</li>
-              </ul>
-              <p className="mt-3 text-xs font-medium leading-5 text-[#7B756E]">
+              <div className="flex flex-wrap items-end justify-between gap-2"><div><p className="text-xs font-black uppercase tracking-[0.12em] text-blue-700">Key takeaway</p><h3 className="mt-1 text-xl font-black tracking-tight text-slate-950">Your mortgage at a glance</h3></div></div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Current repayment</p><p className="mt-2 text-2xl font-black tracking-tight text-slate-950">{currency(currentRepayment)}</p><p className="mt-1 text-xs text-slate-500">Your selected repayment period</p></div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Rate vs market</p><p className={`mt-2 text-2xl font-black tracking-tight ${rateDifference > 0.05 ? "text-amber-700" : rateDifference < -0.05 ? "text-emerald-700" : "text-slate-950"}`}>{Math.abs(rateDifference) < 0.05 ? "In line" : `${percent(Math.abs(rateDifference))} ${ratePosition}`}</p><p className="mt-1 text-xs text-slate-500">Estimated comparable market rate</p></div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Market difference</p><p className={`mt-2 text-2xl font-black tracking-tight ${repaymentDifference > 0.5 ? "text-amber-700" : repaymentDifference < -0.5 ? "text-emerald-700" : "text-slate-950"}`}>{Math.abs(repaymentDifference) < 0.5 ? "Similar" : `${repaymentDifference > 0 ? "+" : "-"}${currency(Math.abs(repaymentDifference))}`}</p><p className="mt-1 text-xs text-slate-500">Per repayment period</p></div>
+                <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-blue-700">Base OCR scenario</p><p className="mt-2 text-2xl font-black tracking-tight text-[#092B63]">{baseScenario ? `${baseScenario.repaymentChange >= 0 ? "+" : "-"}${currency(Math.abs(baseScenario.repaymentChange))}` : "Not applicable"}</p><p className="mt-1 text-xs text-slate-500">{baseScenario ? "Change versus current repayment" : "No fixed tranche to refix"}</p></div>
+              </div>
+              <p className="mt-4 max-w-4xl text-sm leading-6 text-slate-600">Based on your inputs, your current rate is {ratePosition} the estimated market average for a comparable term.{baseScenario ? ` Under the base OCR scenario, your repayment could change by about ${currency(Math.abs(baseScenario.repaymentChange))} per ${String(trancheForecasts[0]?.frequency || "period").toLowerCase()} when this tranche rolls over.` : ""}</p>
+            </section>
+            <section>
+              <h3 className="text-xl font-black tracking-tight text-slate-950">Current position</h3>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {[["Loan balance", currency(loanAmount), "Across all tranches"], ["Current repayment", currency(currentRepayment), "Your selected repayment period"], ["Monthly cost", currency(monthlyCost), "Monthly equivalent"], ["Cash after mortgage", incomeKnown ? currency(cashAfterMortgage) : "Not calculated", incomeKnown ? "After your repayment" : "Add income in Step 2"], ["Debt to income", incomeKnown ? `${dtiRatio.toFixed(2)}x` : "Not calculated", "Debt compared with gross income"], ["Repayment to income", incomeKnown ? percent(repaymentToIncome, 1) : "Not calculated", "Mortgage payment as a share of income"]].map(([label, value, sub]) => <div key={label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-2 text-2xl font-black tracking-tight text-slate-950">{value}</p><p className="mt-1 text-xs leading-5 text-slate-500">{sub}</p></div>)}
+              </div>
+              {extraPayment > 0 && <p className="mt-3 text-xs font-medium text-slate-500">Includes a top-up of {currency(extraPayment)} per repayment period.</p>}
+              <p className="mt-3 text-xs font-medium leading-5 text-slate-500">
                 These figures are based on the details entered and are estimates only.
               </p>
             </section>
 
             <section>
-              <h3 className="text-base font-black text-[#1B2A22]">
+              <h3 className="text-xl font-black tracking-tight text-slate-950">
                 {floatingOnly ? "Average fixed rates to compare" : "Rate comparison by loan tranche"}
               </h3>
               {floatingOnly ? (
                 <>
-                  <div className="mt-3 overflow-x-auto rounded-lg border border-[#E2DDD5] bg-white">
+                  <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200 bg-white">
                     <table className="w-full min-w-[520px] text-left text-sm">
-                      <thead className="bg-[#F7F5F0] text-xs uppercase tracking-wide text-[#7B756E]">
+                      <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                         <tr><th className="p-3">Fixed term</th><th className="p-3">Average market rate</th></tr>
                       </thead>
-                      <tbody className="divide-y divide-[#E2DDD5]">
+                      <tbody className="divide-y divide-slate-200">
                         {averageFixedRates.map((rate) => <tr key={rate.term}><td className="p-3 font-bold">{rate.term}</td><td className="p-3">{percent(rate.rate)}</td></tr>)}
                       </tbody>
                     </table>
@@ -248,27 +260,32 @@ export function ExecutiveSummaryLeadStep({
                 </>
               ) : (
                 <>
-                  <p className="mt-1 text-sm leading-6 text-[#7B756E]">
+                  <div className={`mt-4 rounded-xl border p-4 ${rateDifference > 0.05 ? "border-amber-200 bg-amber-50" : rateDifference < -0.05 ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-white"}`}>
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Rate insight</p>
+                    <p className="mt-1 text-lg font-black tracking-tight text-slate-950">Your rate is {Math.abs(rateDifference) < 0.05 ? "in line with" : `${percent(Math.abs(rateDifference))} ${ratePosition}`} the market estimate.</p>
+                    <p className="mt-1 text-sm text-slate-600">Estimated difference: {Math.abs(repaymentDifference) < 0.5 ? "similar repayment" : `${currency(Math.abs(repaymentDifference))} ${repaymentDifference > 0 ? "more" : "less"} per ${String(primaryMarketRow?.frequency || "period").toLowerCase()}`}.</p>
+                  </div>
+                  <p className="mt-4 text-sm leading-6 text-slate-500">
                     This compares your current repayment with an estimated repayment using the average market rate for the same fixed term.
                   </p>
-                  <div className="mt-3 overflow-x-auto rounded-lg border border-[#E2DDD5] bg-white">
+                  <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200 bg-white">
                     <table className="w-full min-w-[760px] text-left text-sm">
-                      <thead className="bg-[#F7F5F0] text-xs uppercase tracking-wide text-[#7B756E]">
+                      <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                         <tr>
                           <th className="p-3">Tranche</th><th className="p-3">Your rate</th><th className="p-3">Market rate</th><th className="p-3">Your repayment</th><th className="p-3">Market repayment</th><th className="p-3">Compared with market</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-[#E2DDD5] text-[#1B2A22]">
+                      <tbody className="divide-y divide-slate-200 text-slate-900">
                         {marketRateRows.map((row) => {
                           const hasAverageRate = Number.isFinite(row.marketRate);
                           const marketRateNote = !hasAverageRate || Math.abs(row.difference) < 0.05
                             ? ""
-                            : `${percent(Math.abs(row.difference))} ${row.difference > 0 ? "below" : "above"} your rate`;
+                            : `Your rate is ${percent(Math.abs(row.difference))} ${row.difference > 0 ? "above" : "below"} market.`;
                           const impactLabel = !Number.isFinite(row.repaymentDifference)
                             ? "Not available"
                             : Math.abs(row.repaymentDifference) < 0.5
                               ? "Similar to market"
-                              : `You pay about ${currency(Math.abs(row.repaymentDifference))} ${row.repaymentDifference > 0 ? "less" : "more"} / ${String(row.frequency).toLowerCase()}`;
+                              : `Estimated ${currency(Math.abs(row.repaymentDifference))} ${row.repaymentDifference > 0 ? "less" : "more"} / ${String(row.frequency).toLowerCase()}`;
                           const impactTone = !Number.isFinite(row.repaymentDifference) || Math.abs(row.repaymentDifference) < 0.5
                             ? "text-[#7B756E]"
                             : row.repaymentDifference > 0
@@ -368,13 +385,13 @@ export function ExecutiveSummaryLeadStep({
             )}
           </div>
 
-          <p className="mt-4 rounded-lg bg-[#F4FAF6] p-3 text-sm font-semibold leading-6 text-[#3A6047]">
+          <p className="mt-4 rounded-xl border border-slate-200 bg-white p-3 text-sm font-semibold leading-6 text-slate-600">
             {summaryContent.disclaimer}
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="no-print rounded-xl border border-[#D6E2DA] bg-[#F4FAF6] p-4 sm:p-5">
-          <h3 className="text-lg font-black text-[#1B2A22]">Request a mortgage adviser review</h3>
+        <form onSubmit={handleSubmit} className="no-print rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+          <h3 className="text-lg font-black tracking-tight text-slate-950">Request a mortgage adviser review</h3>
           <p className="mt-1 text-sm leading-6 text-[#5F665F]">
             Want a second opinion? A mortgage adviser can review your numbers and help you understand your options.
           </p>
