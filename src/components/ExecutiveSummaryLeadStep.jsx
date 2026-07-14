@@ -220,13 +220,11 @@ export function ExecutiveSummaryLeadStep({
           <div className="grid gap-7">
             <section>
               <div className="flex flex-wrap items-end justify-between gap-2"><div><p className="text-xs font-black uppercase tracking-[0.12em] text-blue-700">Key takeaway</p><h3 className="mt-1 text-xl font-black tracking-tight text-slate-950">Your mortgage at a glance</h3></div></div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Current repayment</p><p className="mt-2 text-2xl font-black tracking-tight text-slate-950">{currency(currentRepayment)}</p><p className="mt-1 text-xs text-slate-500">Your selected repayment period</p></div>
-                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Rate vs market</p><p className={`mt-2 text-2xl font-black tracking-tight ${rateDifference > 0.05 ? "text-amber-700" : rateDifference < -0.05 ? "text-emerald-700" : "text-slate-950"}`}>{percent(Math.abs(rateDifference))} {rateDifference > 0 ? "above" : rateDifference < 0 ? "below" : "difference"}</p><p className="mt-1 text-xs text-slate-500">Your rate against the market estimate</p></div>
-                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Market difference</p><p className={`mt-2 text-2xl font-black tracking-tight ${userRepaymentDifference > 0.5 ? "text-amber-700" : userRepaymentDifference < -0.5 ? "text-emerald-700" : "text-slate-950"}`}>{Math.abs(userRepaymentDifference) < 0.5 ? "Similar" : `${userRepaymentDifference > 0 ? "+" : "-"}${currency(Math.abs(userRepaymentDifference))}`}</p><p className="mt-1 text-xs text-slate-500">{Math.abs(userRepaymentDifference) < 0.5 ? "Comparable repayment" : `You pay ${userRepaymentDifference > 0 ? "more" : "less"} per repayment period`}</p></div>
-                <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-blue-700">Base OCR scenario</p><p className="mt-2 text-2xl font-black tracking-tight text-[#092B63]">{baseScenario ? `${baseScenario.repaymentChange >= 0 ? "+" : "-"}${currency(Math.abs(baseScenario.repaymentChange))}` : "Not applicable"}</p><p className="mt-1 text-xs text-slate-500">{baseScenario ? "Change versus current repayment" : "No fixed tranche to refix"}</p></div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-[#092B63] bg-[#092B63] p-4 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-blue-100">Current repayment</p><p className="mt-2 text-3xl font-black tracking-tight text-white">{currency(currentRepayment)}</p><p className="mt-1 text-xs text-blue-100">Your selected repayment period</p></div>
+                <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-blue-700">Base OCR scenario</p><p className="mt-2 text-3xl font-black tracking-tight text-[#092B63]">{baseScenario ? `${baseScenario.repaymentChange >= 0 ? "+" : "-"}${currency(Math.abs(baseScenario.repaymentChange))}` : "Not applicable"}</p><p className="mt-1 text-xs text-slate-500">{baseScenario ? "Change versus current repayment" : "No fixed tranche to refix"}</p></div>
               </div>
-              <p className="mt-4 max-w-4xl text-sm leading-6 text-slate-600">Based on your inputs, your repayment is estimated to be {Math.abs(userRepaymentDifference) < 0.5 ? "similar to" : `${currency(Math.abs(userRepaymentDifference))} ${userRepaymentDifference > 0 ? "more than" : "less than"}`} the comparable market repayment.{baseScenario ? ` Under the base OCR scenario, your repayment could change by about ${currency(Math.abs(baseScenario.repaymentChange))} per ${String(trancheForecasts[0]?.frequency || "period").toLowerCase()} when this tranche rolls over.` : ""}</p>
+              <p className="mt-4 max-w-4xl text-sm leading-6 text-slate-600">Your current repayment is shown alongside the base OCR scenario for the selected fixed tranche.{baseScenario ? ` Under that scenario, your repayment could change by about ${currency(Math.abs(baseScenario.repaymentChange))} per ${String(trancheForecasts[0]?.frequency || "period").toLowerCase()} when this tranche rolls over.` : ""}</p>
             </section>
             <section>
               <h3 className="text-xl font-black tracking-tight text-slate-950">Current position</h3>
@@ -314,9 +312,8 @@ export function ExecutiveSummaryLeadStep({
 
             {trancheForecasts.length > 0 && (
             <section>
-              <h3 className="text-base font-black text-[#1B2A22]">OCR forecast repayment scenarios</h3>
-              <p className="mt-1 text-sm leading-6 text-[#7B756E]">These scenarios show how each tranche&apos;s repayment may change under optimistic, base, and conservative rate assumptions.</p>
-              <p className="mt-1 text-xs font-medium leading-5 text-[#7B756E]">Optimistic means a lower-rate scenario. Conservative means a higher-rate scenario.</p>
+              <h3 className="text-xl font-black tracking-tight text-slate-950">OCR forecast repayment scenarios</h3>
+              <p className="mt-1 text-sm leading-6 text-slate-500">Current repayment and rate are highlighted first, followed by optimistic, base, and conservative estimates.</p>
               <div className="mt-3 grid gap-3">
                 {trancheForecasts.map((row) => {
                   const scenarios = [
@@ -325,21 +322,21 @@ export function ExecutiveSummaryLeadStep({
                     ["Conservative", row.scenarios.find((scenario) => scenario.key === "conservative")]
                   ];
                   return (
-                    <article key={row.id} className="rounded-lg border border-[#E2DDD5] bg-white p-3 sm:p-4">
+                    <article key={row.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
                           <p className="font-black">Tranche {row.index} · {row.frequency} repayment</p>
                           <p className="text-xs font-medium text-[#7B756E]">Rolling over {row.refixPointLabel === "now" ? "now" : `in ${termLabel(row.refixPointLabel)}`} · {row.fixedTermEnd} · OCR {percent(row.forecastOcr)}</p>
                         </div>
-                        <p className="text-sm font-bold text-[#1B2A22]">Current: {repaymentLabel(row.currentRepayment, row.frequency)} at {percent(row.currentRate)}</p>
+                        <div className="rounded-xl bg-[#092B63] px-4 py-3 text-white"><p className="text-[11px] font-bold uppercase tracking-wide text-blue-100">Current repayment & rate</p><p className="mt-1 text-base font-black">{repaymentLabel(row.currentRepayment, row.frequency)}</p><p className="mt-1 text-xs text-blue-100">Current rate {percent(row.currentRate)}</p></div>
                       </div>
                       <div className="mt-3 grid gap-2 sm:grid-cols-3">
                         {scenarios.map(([label, scenario]) => (
-                          <div key={label} className="rounded-lg bg-[#F7F5F0] p-3">
-                            <p className="text-xs font-black uppercase tracking-wide text-[#7B756E]">{label}</p>
-                            <p className="mt-1 text-lg font-black text-[#1B2A22]">{scenario ? currency(scenario.repayment) : "Not available"}</p>
-                            {scenario && <p className="text-sm font-medium text-[#4F5A52]">{percent(scenario.forecastMortgageRate)}</p>}
-                            {scenario && <p className="mt-1 text-xs font-bold text-[#4F5A52]">{scenario.repaymentChange >= 0 ? "+" : ""}{currency(scenario.repaymentChange)} / {String(row.frequency).toLowerCase()}</p>}
+                          <div key={label} className={`rounded-xl border p-4 ${label === "Optimistic" ? "border-emerald-200 bg-emerald-50" : label === "Base" ? "border-blue-200 bg-blue-50" : "border-amber-200 bg-amber-50"}`}>
+                            <p className={`text-xs font-black uppercase tracking-wide ${label === "Optimistic" ? "text-emerald-700" : label === "Base" ? "text-blue-700" : "text-amber-700"}`}>{label}{label === "Base" ? " · main scenario" : ""}</p>
+                            <p className="mt-2 text-2xl font-black tracking-tight text-slate-950">{scenario ? currency(scenario.repayment) : "Not available"}</p>
+                            {scenario && <p className="mt-1 text-sm font-medium text-slate-600">{percent(scenario.forecastMortgageRate)}</p>}
+                            {scenario && <p className={`mt-2 text-sm font-black ${scenario.repaymentChange > 0 ? "text-amber-700" : scenario.repaymentChange < 0 ? "text-emerald-700" : "text-slate-500"}`}>{scenario.repaymentChange >= 0 ? "+" : "-"}{currency(Math.abs(scenario.repaymentChange))} / {String(row.frequency).toLowerCase()}</p>}
                           </div>
                         ))}
                       </div>
