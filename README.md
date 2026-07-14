@@ -55,7 +55,7 @@ Required Vercel environment variables:
 
 Apply the SQL migration in `supabase/migrations/202607120001_trimrate_mvp.sql` with the Supabase SQL editor or CLI before deploying. It creates: `market_rates`, `market_rate_snapshots`, `ocr_snapshots`, `adviser_review_requests`, and `analytics_events`.
 
-Vercel Cron is configured in `vercel.json` to call daily market-rate and OCR refresh functions. Vercel automatically sends the cron secret as an Authorization bearer token. The market provider uses Rates API with a manual five-bank fallback; the OCR provider has an RBNZ current-rate parser and a documented manual forecast fallback pending a robust MPS parser.
+Vercel Cron is configured in `vercel.json` to refresh market rates daily at 03:00 UTC and review the RBNZ OCR forecast on the first day of each month at 03:15 UTC. Vercel automatically sends the cron secret as an Authorization bearer token. The market provider uses Rates API with a manual five-bank fallback. The OCR job records a monthly review even when the published RBNZ source date is unchanged, while retaining that source date for traceability.
 
 `/admin` is protected with an HttpOnly signed session using `ADMIN_EMAIL` and `ADMIN_PASSWORD`. After deployment, open `https://trimrate.co.nz/admin` and sign in. The dashboard provides summary metrics, raw tables, manual refresh actions, and CSV exports.
 
@@ -93,6 +93,6 @@ Legal copy is draft content and must be reviewed by a qualified legal profession
 
 ## Notes
 
-Rate and OCR data are modelled through explicit snapshots so calculation runs can reference the exact bank-rate and OCR source used. Review the OCR snapshot after RBNZ OCR decisions or Monetary Policy Statements, and confirm final lender rates directly before re-fixing.
+Rate and OCR data are modelled through explicit snapshots so calculation runs can reference the exact bank-rate and OCR source used. The OCR snapshot is reviewed monthly and should also be manually refreshed after an RBNZ OCR decision or Monetary Policy Statement. Confirm final lender rates directly before re-fixing.
 
 Current mortgage-rate comparisons call `https://ratesapi.nz/api/v1/mortgage-rates` through `src/ratesApi.js`. The app filters the feed to ANZ, ASB, BNZ, Kiwibank, and Westpac, excludes obvious green/top-up/offset products from fixed-rate averages, and falls back to a cached major-bank rate set if the live request fails. Confirm final rates directly with lenders before re-fixing.

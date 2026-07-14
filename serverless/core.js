@@ -87,8 +87,9 @@ export async function refreshMarketRates() {
   await insert("market_rate_snapshots", snapshots); return { updated: true, provider: source.provider, fetchedAt, snapshots };
 }
 export async function refreshOcrSnapshot() {
-  const incoming = await ocrSource(); const existing = await select("ocr_snapshots", "select=source_date&order=source_date.desc&limit=1");
-  if (existing[0]?.source_date && existing[0].source_date >= incoming.sourceDate) return { updated: false, sourceDate: existing[0].source_date };
+  const incoming = await ocrSource(); const existing = await select("ocr_snapshots", "select=source_date,fetched_at&order=fetched_at.desc&limit=1");
+  const reviewedThisMonth = existing[0]?.fetched_at && sameCalendarMonth(existing[0].fetched_at, new Date());
+  if (reviewedThisMonth) return { updated: false, sourceDate: existing[0].source_date, reason: "OCR forecast already reviewed this month." };
   const [snapshot] = await insert("ocr_snapshots", { source_name: incoming.sourceName, source_url: incoming.sourceUrl, source_date: incoming.sourceDate, current_ocr: incoming.currentOcr, forecast_points: incoming.forecastPoints, fetched_at: new Date().toISOString() }); return { updated: true, snapshot };
 }
 async function marketSource() {
@@ -105,4 +106,5 @@ function score(product) { const text = `${product.id || ""} ${product.name || ""
 function manualRates() { const averages = { 0: 5.81, 6: 4.68, 12: 4.73, 18: 5.12, 24: 5.24, 36: 5.35, 48: 5.47, 60: 5.57 }; return Object.entries(averages).flatMap(([fixedTerm, rate]) => ["ANZ", "ASB", "BNZ", "Kiwibank", "Westpac"].map((bankName) => ({ bankName, fixedTerm: Number(fixedTerm), rate, rateType: "manual" }))); }
 function manualOcr() { return { sourceName: "RBNZ Monetary Policy Statement manual fallback", sourceUrl: RBNZ_MPS_URL, sourceDate: "2026-06-03", currentOcr: 2.5, forecastPoints: [{ date: "2026-06-30", ocr: 2.3 }, { date: "2026-09-30", ocr: 2.5 }, { date: "2026-12-31", ocr: 2.8 }, { date: "2027-03-31", ocr: 3.0 }, { date: "2027-06-30", ocr: 3.1 }, { date: "2027-09-30", ocr: 3.1 }, { date: "2027-12-31", ocr: 3.1 }, { date: "2028-03-31", ocr: 3.2 }, { date: "2028-06-30", ocr: 3.2 }] }; }
 function dateOnly(value) { return new Date(value).toISOString().slice(0, 10); }
+function sameCalendarMonth(value, date) { const left = new Date(value); return !Number.isNaN(left.getTime()) && left.getUTCFullYear() === date.getUTCFullYear() && left.getUTCMonth() === date.getUTCMonth(); }
 function round(value) { return Math.round(value * 1000) / 1000; }
