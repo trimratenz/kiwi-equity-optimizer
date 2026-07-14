@@ -13,12 +13,12 @@ export function MarketRateComparisonStep({
 }) {
   const selectedBankName = bankOptions.find((bank) => bank.id === selectedBankId)?.name;
   const matchedRateLabel = selectedBankName ? `${selectedBankName} rate` : "Five-bank average";
-  const differenceLabel = selectedBankName ? `${selectedBankName} vs your rate` : "Average vs your rate";
+  const differenceLabel = selectedBankName ? `Your rate vs ${selectedBankName}` : "Your rate vs average";
   const repaymentFrequencies = [...new Set(marketRateRows.map((row) => row.frequency).filter(Boolean))];
   const impactLabel =
     repaymentFrequencies.length === 1 && repaymentFrequencies[0] === "Monthly"
-      ? "Estimated monthly impact"
-      : "Estimated repayment impact";
+      ? "Your monthly difference"
+      : "Your repayment difference";
 
   return (
     <StepShell
@@ -65,8 +65,9 @@ export function MarketRateComparisonStep({
           </thead>
           <tbody className="divide-y divide-slate-200 text-slate-900">
             {marketRateRows.map((row) => {
-              const isRepaymentLower = row.repaymentDifference > 0;
-              const isRepaymentSame = Math.abs(row.repaymentDifference) < 0.5;
+              const userRepaymentDifference = -row.repaymentDifference;
+              const isRepaymentLower = userRepaymentDifference < 0;
+              const isRepaymentSame = Math.abs(userRepaymentDifference) < 0.5;
               const repaymentTone = isRepaymentSame
                 ? "text-slate-500"
                 : isRepaymentLower
@@ -107,8 +108,8 @@ export function MarketRateComparisonStep({
                   </p>
                   <p className={`mt-1 text-xs font-black ${repaymentTone}`}>
                     {isRepaymentSame
-                      ? "No repayment change"
-                      : `${row.repaymentDifference > 0 ? "+" : ""}${currency(row.repaymentDifference)} vs your rate`}
+                      ? "Similar to market"
+                      : `You pay ${currency(Math.abs(userRepaymentDifference))} ${userRepaymentDifference > 0 ? "more" : "less"}`}
                   </p>
                   <p className="text-xs font-medium text-slate-500">Your current: {currency(row.currentRepayment)}</p>
                 </td>

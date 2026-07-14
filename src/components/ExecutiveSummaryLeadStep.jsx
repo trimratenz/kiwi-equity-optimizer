@@ -83,6 +83,7 @@ export function ExecutiveSummaryLeadStep({
   const incomeKnown = Number(salaryAmount) > 0;
   const rateDifference = primaryMarketRow?.difference ?? 0;
   const repaymentDifference = primaryMarketRow?.repaymentDifference ?? 0;
+  const userRepaymentDifference = -repaymentDifference;
   const ratePosition = Math.abs(rateDifference) < 0.05 ? "in line with" : rateDifference > 0 ? "above" : "below";
 
   useEffect(() => {
@@ -222,10 +223,10 @@ export function ExecutiveSummaryLeadStep({
               <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Current repayment</p><p className="mt-2 text-2xl font-black tracking-tight text-slate-950">{currency(currentRepayment)}</p><p className="mt-1 text-xs text-slate-500">Your selected repayment period</p></div>
                 <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Rate vs market</p><p className={`mt-2 text-2xl font-black tracking-tight ${rateDifference > 0.05 ? "text-amber-700" : rateDifference < -0.05 ? "text-emerald-700" : "text-slate-950"}`}>{percent(Math.abs(rateDifference))} {rateDifference > 0 ? "above" : rateDifference < 0 ? "below" : "difference"}</p><p className="mt-1 text-xs text-slate-500">Your rate against the market estimate</p></div>
-                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Market difference</p><p className={`mt-2 text-2xl font-black tracking-tight ${repaymentDifference > 0.5 ? "text-amber-700" : repaymentDifference < -0.5 ? "text-emerald-700" : "text-slate-950"}`}>{Math.abs(repaymentDifference) < 0.5 ? "Similar" : `${repaymentDifference > 0 ? "+" : "-"}${currency(Math.abs(repaymentDifference))}`}</p><p className="mt-1 text-xs text-slate-500">Per repayment period</p></div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Market difference</p><p className={`mt-2 text-2xl font-black tracking-tight ${userRepaymentDifference > 0.5 ? "text-amber-700" : userRepaymentDifference < -0.5 ? "text-emerald-700" : "text-slate-950"}`}>{Math.abs(userRepaymentDifference) < 0.5 ? "Similar" : `${userRepaymentDifference > 0 ? "+" : "-"}${currency(Math.abs(userRepaymentDifference))}`}</p><p className="mt-1 text-xs text-slate-500">{Math.abs(userRepaymentDifference) < 0.5 ? "Comparable repayment" : `You pay ${userRepaymentDifference > 0 ? "more" : "less"} per repayment period`}</p></div>
                 <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-blue-700">Base OCR scenario</p><p className="mt-2 text-2xl font-black tracking-tight text-[#092B63]">{baseScenario ? `${baseScenario.repaymentChange >= 0 ? "+" : "-"}${currency(Math.abs(baseScenario.repaymentChange))}` : "Not applicable"}</p><p className="mt-1 text-xs text-slate-500">{baseScenario ? "Change versus current repayment" : "No fixed tranche to refix"}</p></div>
               </div>
-              <p className="mt-4 max-w-4xl text-sm leading-6 text-slate-600">Based on your inputs, your repayment is estimated to be {Math.abs(repaymentDifference) < 0.5 ? "similar to" : `${currency(Math.abs(repaymentDifference))} ${repaymentDifference > 0 ? "more than" : "less than"}`} the comparable market repayment.{baseScenario ? ` Under the base OCR scenario, your repayment could change by about ${currency(Math.abs(baseScenario.repaymentChange))} per ${String(trancheForecasts[0]?.frequency || "period").toLowerCase()} when this tranche rolls over.` : ""}</p>
+              <p className="mt-4 max-w-4xl text-sm leading-6 text-slate-600">Based on your inputs, your repayment is estimated to be {Math.abs(userRepaymentDifference) < 0.5 ? "similar to" : `${currency(Math.abs(userRepaymentDifference))} ${userRepaymentDifference > 0 ? "more than" : "less than"}`} the comparable market repayment.{baseScenario ? ` Under the base OCR scenario, your repayment could change by about ${currency(Math.abs(baseScenario.repaymentChange))} per ${String(trancheForecasts[0]?.frequency || "period").toLowerCase()} when this tranche rolls over.` : ""}</p>
             </section>
             <section>
               <h3 className="text-xl font-black tracking-tight text-slate-950">Current position</h3>
@@ -263,7 +264,7 @@ export function ExecutiveSummaryLeadStep({
                   <div className={`mt-4 rounded-xl border p-4 ${rateDifference > 0.05 ? "border-amber-200 bg-amber-50" : rateDifference < -0.05 ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-white"}`}>
                     <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Rate insight</p>
                     <p className="mt-1 text-lg font-black tracking-tight text-slate-950">Your rate is {Math.abs(rateDifference) < 0.05 ? "in line with" : `${percent(Math.abs(rateDifference))} ${ratePosition}`} the market estimate.</p>
-                    <p className="mt-1 text-sm text-slate-600">Estimated difference: {Math.abs(repaymentDifference) < 0.5 ? "similar repayment" : `${currency(Math.abs(repaymentDifference))} ${repaymentDifference > 0 ? "more" : "less"} per ${String(primaryMarketRow?.frequency || "period").toLowerCase()}`}.</p>
+                    <p className="mt-1 text-sm text-slate-600">Estimated difference: {Math.abs(userRepaymentDifference) < 0.5 ? "similar repayment" : `you pay ${currency(Math.abs(userRepaymentDifference))} ${userRepaymentDifference > 0 ? "more" : "less"} per ${String(primaryMarketRow?.frequency || "period").toLowerCase()}`}.</p>
                   </div>
                   <p className="mt-4 text-sm leading-6 text-slate-500">
                     This compares your current repayment with an estimated repayment using the average market rate for the same fixed term.
@@ -277,6 +278,7 @@ export function ExecutiveSummaryLeadStep({
                       </thead>
                       <tbody className="divide-y divide-slate-200 text-slate-900">
                         {marketRateRows.map((row) => {
+                          const userRepaymentDifference = -row.repaymentDifference;
                           const hasAverageRate = Number.isFinite(row.marketRate);
                           const marketRateNote = !hasAverageRate || Math.abs(row.difference) < 0.05
                             ? ""
@@ -285,10 +287,10 @@ export function ExecutiveSummaryLeadStep({
                             ? "Not available"
                             : Math.abs(row.repaymentDifference) < 0.5
                               ? "Similar to market"
-                              : `Estimated ${currency(Math.abs(row.repaymentDifference))} ${row.repaymentDifference > 0 ? "less" : "more"} / ${String(row.frequency).toLowerCase()}`;
+                              : `You pay ${currency(Math.abs(userRepaymentDifference))} ${userRepaymentDifference > 0 ? "more" : "less"} / ${String(row.frequency).toLowerCase()}`;
                           const impactTone = !Number.isFinite(row.repaymentDifference) || Math.abs(row.repaymentDifference) < 0.5
                             ? "text-[#7B756E]"
-                            : row.repaymentDifference > 0
+                            : userRepaymentDifference < 0
                               ? "text-[#3A6047]"
                               : "text-[#C86A53]";
                           return <tr key={row.id}>
