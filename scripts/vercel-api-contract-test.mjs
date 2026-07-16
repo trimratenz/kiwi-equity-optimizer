@@ -19,6 +19,8 @@ assert.match(storage, /appendLead/, "lead requests are sent to Google Sheets");
 
 const script = source("../google-apps-script/Code.gs");
 assert.match(script, /function doPost/, "Apps Script exposes a POST receiver");
+assert.match(script, /function doGet/, "Apps Script provides a no-write health check");
+assert.match(script, /editor Run button/, "Apps Script handles manual editor runs safely");
 assert.match(script, /computeHmacSha256Signature/, "Apps Script verifies request signatures");
 
 const client = source("../src/analyticsClient.js");

@@ -1,7 +1,12 @@
 /** TrimRate Google Sheets receiver. Deploy as a Web app that runs as you. */
+function doGet() { return reply({ ok: true, status: 'TrimRate webhook is online. Send signed POST requests to save data.' }); }
+
 function doPost(e) {
   const lock = LockService.getScriptLock();
   try {
+    // Clicking Run in the Apps Script editor does not provide an event object.
+    // This endpoint is intentionally invoked only by a deployed Web App POST.
+    if (!e || !e.postData || !e.postData.contents) return reply({ ok: false, error: 'Use the deployed Web App URL for POST tests; the editor Run button does not send request data.' });
     lock.waitLock(10000);
     const request = JSON.parse(e.postData.contents || '{}');
     const secret = PropertiesService.getScriptProperties().getProperty('TRIMRATE_WEBHOOK_SECRET');
