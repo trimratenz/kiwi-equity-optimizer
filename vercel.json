@@ -12,6 +12,7 @@
     { "source": "/api/admin/(.*)", "destination": "/api/admin?path=$1" },
     { "source": "/api/cron/(.*)", "destination": "/api/cron?job=$1" },
     { "source": "/admin", "destination": "/api/admin?path=page" },
+    { "source": "/admin/test", "destination": "/api/admin?path=test-page" },
     { "source": "/calculator", "destination": "/index.html" },
     { "source": "/info", "destination": "/index.html" },
     { "source": "/contact", "destination": "/index.html" },

@@ -3,6 +3,15 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 const buckets = new Map();
 
+export function deploymentEnvironment() {
+  const value = String(process.env.TRIMRATE_ENV || process.env.VERCEL_ENV || "development").toLowerCase();
+  return value === "production" ? "production" : value === "preview" ? "preview" : "development";
+}
+export function isProductionEnvironment() { return deploymentEnvironment() === "production"; }
+export function allowNonProductionWrites() { return process.env.TRIMRATE_ALLOW_NONPROD_WRITES === "true"; }
+export function canPersistPublicData() { return isProductionEnvironment() || allowNonProductionWrites(); }
+export function canUseAdminTest() { return !isProductionEnvironment() || process.env.ADMIN_TEST_ENABLED === "true"; }
+
 export function json(response, status, body, headers = {}) {
   Object.entries({ "cache-control": "no-store", ...headers }).forEach(([key, value]) => response.setHeader(key, value));
   response.status(status).json(body);

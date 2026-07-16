@@ -23,6 +23,31 @@ The test suite covers form state, calculation outputs, re-fix scenario selection
 
 ## Production deploy
 
+## Safe development and deployment workflow
+
+`master` is the current production branch (rename it to `main` in GitHub only after updating Vercel's Production Branch setting). Do not commit or push Codex work directly to that production branch. Work on a feature branch, run `pnpm run verify`, push the branch, test the Vercel Preview URL, open a pull request, and merge only after review and passing checks:
+
+`feature branch → push → Vercel Preview URL → test → pull request → merge → production`
+
+Vercel Preview deployments must use Preview environment variables and their generated `*.vercel.app` URL only—never `trimrate.co.nz`. Set `TRIMRATE_ENV=preview` and `TRIMRATE_ALLOW_NONPROD_WRITES=false` for Preview. In that configuration public analytics and adviser submissions return a preview acknowledgement but never write records, and cron calls are rejected. Use a separate Preview Supabase project and its own service-role key where practical; only set `TRIMRATE_ALLOW_NONPROD_WRITES=true` when that isolated project is confirmed.
+
+Environment variables:
+
+| Environment | Required settings |
+| --- | --- |
+| Development | `TRIMRATE_ENV=development`, `TRIMRATE_ALLOW_NONPROD_WRITES=false`, local/test Supabase or no server persistence |
+| Preview | `TRIMRATE_ENV=preview`, `TRIMRATE_ALLOW_NONPROD_WRITES=false`, separate Preview Supabase URL/key, non-production admin credentials |
+| Production | `TRIMRATE_ENV=production`, production Supabase URL/key, `CRON_SECRET`, production admin credentials; set `ADMIN_TEST_ENABLED=true` only for temporary authenticated `/admin/test` access |
+
+Required manual settings:
+
+1. In GitHub, protect `master` (or `main` after the planned rename): require pull requests, one approval, the `CI / test-and-build` check, and prohibit direct pushes/force pushes.
+2. In Vercel, set that protected branch as **Production Branch**. Confirm all other branches create Preview deployments and that only the production deployment is assigned `trimrate.co.nz`/`www.trimrate.co.nz`.
+3. In Vercel Environment Variables, assign production secrets only to Production. Add separate Preview Supabase/admin values only to Preview. Never set `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`, or production admin credentials for Preview.
+4. Confirm Vercel cron is configured for Production deployments only. The application also refuses to execute cron outside production.
+
+The protected, no-index `/admin/test` page is available locally and in Preview after admin login. It reports the environment, build revision, database connectivity, write status, and calculation test cases. It is disabled in production unless `ADMIN_TEST_ENABLED=true`.
+
 The frontend is ready for Vercel through the included `vercel.json`:
 
 - Framework preset: Vite
