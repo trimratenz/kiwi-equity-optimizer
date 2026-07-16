@@ -3,12 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@11.10.0",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
     "server": "node server/index.mjs",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "npm run test:form && npm run test:golden && npm run test:refix && npm run test:snapshots && npm run test:summary && npm run test:backend && npm run test:vercel-api && npm run test:security && npm run test:frontend-ux",
+    "verify": "pnpm test && pnpm run build",
+    "test": "pnpm run test:form && pnpm run test:golden && pnpm run test:refix && pnpm run test:snapshots && pnpm run test:summary && pnpm run test:backend && pnpm run test:vercel-api && pnpm run test:security && pnpm run test:deployment-safeguards && pnpm run test:frontend-ux",
     "test:form": "node scripts/form-state-smoke-test.mjs",
     "test:golden": "node scripts/calculation-golden-test.mjs",
     "test:refix": "node scripts/refix-scenario-selection-test.mjs",
@@ -17,6 +19,7 @@
     "test:backend": "node scripts/backend-api-test.mjs",
     "test:vercel-api": "node scripts/vercel-api-contract-test.mjs",
     "test:security": "node scripts/security-regression-test.mjs",
+    "test:deployment-safeguards": "node scripts/deployment-safeguards-test.mjs",
     "test:frontend-ux": "node scripts/frontend-ux-test.mjs"
   },
   "dependencies": {
