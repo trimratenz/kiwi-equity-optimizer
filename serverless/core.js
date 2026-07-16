@@ -12,6 +12,13 @@ export function allowNonProductionWrites() { return process.env.TRIMRATE_ALLOW_N
 export function canPersistPublicData() { return isProductionEnvironment() || allowNonProductionWrites(); }
 export function canUseAdminTest() { return !isProductionEnvironment() || process.env.ADMIN_TEST_ENABLED === "true"; }
 
+// Safe to expose to an authenticated admin: this identifies the configured
+// Supabase project without exposing a URL path, API key, or other secret.
+export function supabaseProjectHost() {
+  try { return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "").host || "not configured"; }
+  catch { return "invalid URL"; }
+}
+
 export function json(response, status, body, headers = {}) {
   Object.entries({ "cache-control": "no-store", ...headers }).forEach(([key, value]) => response.setHeader(key, value));
   response.status(status).json(body);
