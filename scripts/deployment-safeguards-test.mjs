@@ -18,5 +18,6 @@ try {
   assert.match(admin, /Unable to load dashboard data/, "admin displays a useful dashboard error");
   assert.match(admin, /databaseProject/, "admin diagnostics identify the configured Supabase project without exposing secrets");
   assert.match(admin, /Promise\.allSettled/, "test diagnostics report API failures instead of remaining in a loading state");
+  assert.match(admin, /const status=document\.querySelector\('#status'\)/, "test diagnostics do not collide with window.status");
   console.log("Deployment safeguards test passed");
 } finally { for (const [key, value] of Object.entries(original)) { if (value === undefined) delete process.env[key === "trimrate" ? "TRIMRATE_ENV" : key === "vercel" ? "VERCEL_ENV" : "TRIMRATE_ALLOW_NONPROD_WRITES"]; else process.env[key === "trimrate" ? "TRIMRATE_ENV" : key === "vercel" ? "VERCEL_ENV" : "TRIMRATE_ALLOW_NONPROD_WRITES"] = value; } }
