@@ -29,24 +29,24 @@ The test suite covers form state, calculation outputs, re-fix scenario selection
 
 `feature branch → push → Vercel Preview URL → test → pull request → merge → production`
 
-Vercel Preview deployments must use Preview environment variables and their generated `*.vercel.app` URL only—never `trimrate.co.nz`. Set `TRIMRATE_ENV=preview` and `TRIMRATE_ALLOW_NONPROD_WRITES=false` for Preview. In that configuration public analytics and adviser submissions return a preview acknowledgement but never write records, and cron calls are rejected. Use a separate Preview Supabase project and its own service-role key where practical; only set `TRIMRATE_ALLOW_NONPROD_WRITES=true` when that isolated project is confirmed.
+Vercel Preview deployments must use Preview environment variables and their generated `*.vercel.app` URL only—never `trimrate.co.nz`. Set `TRIMRATE_ENV=preview` and `TRIMRATE_ALLOW_NONPROD_WRITES=false` for Preview. In that configuration public analytics and adviser submissions return a preview acknowledgement but never write records, and cron calls are rejected.
 
 Environment variables:
 
 | Environment | Required settings |
 | --- | --- |
-| Development | `TRIMRATE_ENV=development`, `TRIMRATE_ALLOW_NONPROD_WRITES=false`, local/test Supabase or no server persistence |
-| Preview | `TRIMRATE_ENV=preview`, `TRIMRATE_ALLOW_NONPROD_WRITES=false`, separate Preview Supabase URL/key, non-production admin credentials |
-| Production | `TRIMRATE_ENV=production`, production Supabase URL/key, `CRON_SECRET`, production admin credentials; set `ADMIN_TEST_ENABLED=true` only for temporary authenticated `/admin/test` access |
+| Development | `TRIMRATE_ENV=development`, `TRIMRATE_ALLOW_NONPROD_WRITES=false` |
+| Preview | `TRIMRATE_ENV=preview`, `TRIMRATE_ALLOW_NONPROD_WRITES=false`, non-production admin credentials |
+| Production | `TRIMRATE_ENV=production`, Google Sheets webhook settings, `CRON_SECRET`, production admin credentials; set `ADMIN_TEST_ENABLED=true` only for temporary authenticated `/admin/test` access |
 
 Required manual settings:
 
 1. In GitHub, protect `master` (or `main` after the planned rename): require pull requests, one approval, the `CI / test-and-build` check, and prohibit direct pushes/force pushes.
 2. In Vercel, set that protected branch as **Production Branch**. Confirm all other branches create Preview deployments and that only the production deployment is assigned `trimrate.co.nz`/`www.trimrate.co.nz`.
-3. In Vercel Environment Variables, assign production secrets only to Production. Add separate Preview Supabase/admin values only to Preview. Never set `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`, or production admin credentials for Preview.
+3. In Vercel Environment Variables, assign production secrets only to Production. Do not put `GOOGLE_SHEETS_WEBHOOK_SECRET`, `CRON_SECRET`, or production admin credentials in Preview.
 4. Confirm Vercel cron is configured for Production deployments only. The application also refuses to execute cron outside production.
 
-The protected, no-index `/admin/test` page is available locally and in Preview after admin login. It reports the environment, build revision, database connectivity, write status, and calculation test cases. It is disabled in production unless `ADMIN_TEST_ENABLED=true`.
+The protected, no-index `/admin/test` page is available locally and in Preview after admin login. It reports the environment, Google Sheets configuration, rate-provider arrangement, and write status. It is disabled in production unless `ADMIN_TEST_ENABLED=true`.
 
 The frontend is ready for Vercel through the included `vercel.json`:
 
@@ -76,9 +76,9 @@ Required Vercel environment variables:
 - `ADMIN_EMAIL`
 - `ADMIN_PASSWORD`
 
-The ready-to-deploy Apps Script is in `google-apps-script/Code.gs`. Its two Script Properties must be `TRIMRATE_WEBHOOK_SECRET` (the same value as Vercel) and `TRIMRATE_SPREADSHEET_ID` (the ID in the created Sheet URL). Deploy it as a Web app, run as you, accessible to anyone. Keep the Sheet itself private. The workbook has `Leads` and `Events` tabs and can be exported directly as CSV or Excel.
+The ready-to-deploy Apps Script is in `google-apps-script/Code.gs`. Its two Script Properties must be `TRIMRATE_WEBHOOK_SECRET` (the same value as Vercel) and `TRIMRATE_SPREADSHEET_ID` (the ID in the created Sheet URL). Deploy it as a Web app, run as you, accessible to anyone. Keep the Sheet itself private. The workbook has `Leads` and `Activity` tabs and can be exported directly as CSV or Excel.
 
-Vercel Cron is configured in `vercel.json` to refresh market rates daily at 03:00 UTC and review the RBNZ OCR forecast on the first day of each month at 03:15 UTC. Vercel automatically sends the cron secret as an Authorization bearer token. The market provider uses Rates API with a manual five-bank fallback. The OCR job records a monthly review even when the published RBNZ source date is unchanged, while retaining that source date for traceability.
+Vercel Cron is configured in `vercel.json` to check Rates API daily at 03:00 UTC. It verifies that ANZ, ASB, BNZ, Kiwibank, and Westpac are present in the provider response. Vercel automatically sends the cron secret as an Authorization bearer token. The calculator reads the same live provider directly and falls back to its bundled five-bank snapshot if that request is unavailable. The OCR forecast is a bundled published snapshot, not a database job.
 
 Open the private Google Sheet to review or export leads and analytics. The legacy `/admin` dashboard remains only for rate-snapshot diagnostics while that optional feature is retained.
 
@@ -116,6 +116,6 @@ Legal copy is draft content and must be reviewed by a qualified legal profession
 
 ## Notes
 
-Rate and OCR data are modelled through explicit snapshots so calculation runs can reference the exact bank-rate and OCR source used. The OCR snapshot is reviewed monthly and should also be manually refreshed after an RBNZ OCR decision or Monetary Policy Statement. Confirm final lender rates directly before re-fixing.
+Rate and OCR data are modelled through explicit snapshots so calculation runs can reference the source used. The OCR snapshot should be manually updated after an RBNZ OCR decision or Monetary Policy Statement. Confirm final lender rates directly before re-fixing.
 
 Current mortgage-rate comparisons call `https://ratesapi.nz/api/v1/mortgage-rates` through `src/ratesApi.js`. The app filters the feed to ANZ, ASB, BNZ, Kiwibank, and Westpac, excludes obvious green/top-up/offset products from fixed-rate averages, and falls back to a cached major-bank rate set if the live request fails. Confirm final rates directly with lenders before re-fixing.

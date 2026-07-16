@@ -5,8 +5,6 @@
   "outputDirectory": "dist",
   "installCommand": "pnpm install --frozen-lockfile",
   "rewrites": [
-    { "source": "/api/market-rates/latest", "destination": "/api/public?route=market-rates/latest" },
-    { "source": "/api/ocr-snapshot/latest", "destination": "/api/public?route=ocr-snapshot/latest" },
     { "source": "/api/adviser-review-request", "destination": "/api/public?route=adviser-review-request" },
     { "source": "/api/analytics/event", "destination": "/api/public?route=analytics/event" },
     { "source": "/api/admin/(.*)", "destination": "/api/admin?path=$1" },
@@ -20,8 +18,7 @@
     { "source": "/terms-of-use", "destination": "/index.html" }
   ],
   "crons": [
-    { "path": "/api/cron/refresh-market-rates", "schedule": "0 3 * * *" },
-    { "path": "/api/cron/refresh-ocr-snapshot", "schedule": "15 3 1 * *" }
+    { "path": "/api/cron/refresh-market-rates", "schedule": "0 3 * * *" }
   ],
   "functions": {
     "api/cron.js": { "maxDuration": 30 },
