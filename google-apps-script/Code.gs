@@ -22,7 +22,7 @@ function doPost(e) {
 }
 
 function saveLead(book, data) {
-  book.getSheetByName('Leads').appendRow([data.id, data.session_id, data.created_at, data.name, data.email, data.phone, data.preferred_contact_method, 'Consented', stringify(data.loan_details), stringify(data.calculated_summary), stringify(data.market_comparison), stringify(data.ocr_forecast_summary), data.user_notes, data.referral_status || 'New']);
+  book.getSheetByName('Leads').appendRow([data.id, data.session_id, data.created_at, data.name, data.email, data.phone, data.property_address, data.current_bank, data.preferred_contact_method, 'Consented', stringify(data.loan_details), stringify(data.calculated_summary), stringify(data.market_comparison), stringify(data.ocr_forecast_summary), data.user_notes, data.referral_status || 'New']);
   if (data.session_id) linkLead(book, data.session_id, data.id);
 }
 
