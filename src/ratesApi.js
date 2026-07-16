@@ -162,16 +162,6 @@ function mergeSnapshotRecordsWithFallback(liveSnapshot) {
 }
 
 export async function fetchMortgageRates() {
-  try {
-    const backendResponse = await fetch("/api/market-rates/latest", { headers: { Accept: "application/json" } });
-    if (backendResponse.ok) {
-      const savedSnapshot = await backendResponse.json();
-      if (Array.isArray(savedSnapshot.rates) && savedSnapshot.rates.length) return savedSnapshot;
-    }
-  } catch {
-    // The public website continues with the current live provider and local fallback below.
-  }
-
   const response = await fetch(MORTGAGE_RATES_ENDPOINT, {
     headers: { Accept: "application/json" }
   });

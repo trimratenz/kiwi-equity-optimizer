@@ -35,7 +35,10 @@ const admin = source("../api/admin.js");
 assert.match(admin, /isAdmin\(request\)/, "admin dashboard API requires authentication");
 const config = source("../vercel.json");
 assert.match(config, /refresh-market-rates/, "Vercel cron is configured");
-assert.match(config, /maxDuration/, "refresh functions have enough time for provider and database work");
+assert.match(config, /maxDuration/, "refresh function has enough time for the provider health check");
 assert.match(config, /api\/public/, "public API routes are consolidated");
+assert.doesNotMatch(config, /market-rates\/latest/, "legacy Supabase market-rate endpoint is removed");
+assert.doesNotMatch(config, /ocr-snapshot\/latest/, "legacy Supabase OCR endpoint is removed");
+assert.doesNotMatch(storage, /SUPABASE_SERVICE_ROLE_KEY/, "runtime no longer requires Supabase");
 
 console.log("Vercel API contract test passed");

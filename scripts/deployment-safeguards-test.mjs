@@ -15,9 +15,8 @@ try {
   assert.match(publicApi, /canPersistPublicData/);
   const admin = readFileSync(new URL("../api/admin.js", import.meta.url), "utf8");
   assert.doesNotMatch(admin, /catch\{location='\/admin'\}/, "admin failures do not redirect in a loop");
-  assert.match(admin, /Unable to load dashboard data/, "admin displays a useful dashboard error");
-  assert.match(admin, /databaseProject/, "admin diagnostics identify the configured Supabase project without exposing secrets");
-  assert.match(admin, /Promise\.allSettled/, "test diagnostics report API failures instead of remaining in a loading state");
-  assert.match(admin, /const status=document\.querySelector\('#status'\)/, "test diagnostics do not collide with window.status");
+  assert.match(admin, /Google Sheets webhook configured/, "admin reports Google Sheets configuration without exposing secrets");
+  assert.match(admin, /Rates API/, "admin identifies the direct rate provider");
+  assert.match(admin, /fetch\('\/api\/admin\/test-status'\)/, "test diagnostics request the current status endpoint");
   console.log("Deployment safeguards test passed");
 } finally { for (const [key, value] of Object.entries(original)) { if (value === undefined) delete process.env[key === "trimrate" ? "TRIMRATE_ENV" : key === "vercel" ? "VERCEL_ENV" : "TRIMRATE_ALLOW_NONPROD_WRITES"]; else process.env[key === "trimrate" ? "TRIMRATE_ENV" : key === "vercel" ? "VERCEL_ENV" : "TRIMRATE_ALLOW_NONPROD_WRITES"] = value; } }

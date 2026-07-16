@@ -490,7 +490,7 @@ export function ExecutiveSummaryLeadStep({
             {submitted && (
               <p className="rounded-lg bg-white px-3 py-2 text-sm font-bold text-[#3A6047]">
                 {previewStored
-                  ? "Preview test saved to the Preview Supabase project only."
+                  ? "Preview test saved to the Preview Google Sheet only."
                   : previewSubmission
                     ? "Preview test accepted. No adviser request or personal details were stored."
                   : "Request captured. The broker-ready summary payload was attached for review."}

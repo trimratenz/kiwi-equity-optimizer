@@ -21,7 +21,8 @@ try {
   assert.equal(requireCron({ headers: {}, query: { secret: "cron-test-secret" } }), false, "cron secret is never accepted in a URL");
 
   const refreshSource = readFileSync(new URL("../serverless/core.js", import.meta.url), "utf8");
-  assert.match(refreshSource, /Provider refresh failed; keeping the latest valid saved snapshot/, "failed provider refresh keeps saved market data");
+  assert.match(refreshSource, /Rates API did not return all five required banks\./, "daily rate health check rejects incomplete five-bank provider data");
+  assert.doesNotMatch(refreshSource, /SUPABASE_SERVICE_ROLE_KEY/, "rate health check does not depend on Supabase");
   console.log("Security regression test passed");
 } finally {
   if (originalEmail === undefined) delete process.env.ADMIN_EMAIL; else process.env.ADMIN_EMAIL = originalEmail;
