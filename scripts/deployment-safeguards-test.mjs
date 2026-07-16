@@ -13,5 +13,8 @@ try {
   assert.match(cron, /Cron jobs are disabled outside production/);
   assert.match(publicApi, /Preview submission accepted but not stored/);
   assert.match(publicApi, /canPersistPublicData/);
+  const admin = readFileSync(new URL("../api/admin.js", import.meta.url), "utf8");
+  assert.doesNotMatch(admin, /catch\{location='\/admin'\}/, "admin failures do not redirect in a loop");
+  assert.match(admin, /Unable to load dashboard data/, "admin displays a useful dashboard error");
   console.log("Deployment safeguards test passed");
 } finally { for (const [key, value] of Object.entries(original)) { if (value === undefined) delete process.env[key === "trimrate" ? "TRIMRATE_ENV" : key === "vercel" ? "VERCEL_ENV" : "TRIMRATE_ALLOW_NONPROD_WRITES"]; else process.env[key === "trimrate" ? "TRIMRATE_ENV" : key === "vercel" ? "VERCEL_ENV" : "TRIMRATE_ALLOW_NONPROD_WRITES"] = value; } }

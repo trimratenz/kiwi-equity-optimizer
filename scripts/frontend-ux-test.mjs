@@ -20,6 +20,7 @@ assert.match(stepOne, /This is lower than the estimated minimum/, "lower repayme
 assert.match(stepOne, /value: "Floating", label: "Floating"/, "loan type uses Floating wording");
 const rateStress = readFileSync(new URL("../src/components/RateStressStep.jsx", import.meta.url), "utf8");
 const summary = readFileSync(new URL("../src/components/ExecutiveSummaryLeadStep.jsx", import.meta.url), "utf8");
+assert.match(summary, /Preview test accepted\. No adviser request or personal details were stored\./, "Preview submissions clearly state that they are not persisted");
 for (const source of [main, stepOne, rateStress, summary]) {
   assert.doesNotMatch(source, /Variable/i, "no Variable wording remains in visible loan flow");
   assert.doesNotMatch(source, /Floating\s+Floating/i, "loan type wording is never duplicated");
