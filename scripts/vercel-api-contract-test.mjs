@@ -3,19 +3,25 @@ import { readFileSync } from "node:fs";
 
 function source(path) { return readFileSync(new URL(path, import.meta.url), "utf8"); }
 
-const migration = source("../supabase/migrations/202607120001_trimrate_mvp.sql");
-for (const table of ["market_rates", "market_rate_snapshots", "ocr_snapshots", "adviser_review_requests", "analytics_events"]) {
-  assert.match(migration, new RegExp(`create table if not exists public\\.${table}`), `${table} migration exists`);
-}
-
 const adviser = source("../api/public.js");
 assert.match(adviser, /consentGiven/, "adviser endpoint requires consent");
 assert.match(adviser, /rateLimit\(request\)/, "adviser endpoint is rate limited");
 assert.match(adviser, /website/, "adviser endpoint has a spam honeypot");
 
 const analytics = adviser;
-assert.match(analytics, /analytics_events/, "analytics endpoint stores anonymous events");
+assert.match(analytics, /appendAnalyticsEvent/, "analytics endpoint writes anonymous events to Google Sheets");
 assert.match(analytics, /sessionId/, "analytics endpoint requires an anonymous session ID");
+
+const storage = source("../serverless/core.js");
+assert.match(storage, /GOOGLE_SHEETS_WEBHOOK_URL/, "Google Sheets webhook URL is configured server-side");
+assert.match(storage, /createHmac/, "Google Sheets requests are signed");
+assert.match(storage, /appendLead/, "lead requests are sent to Google Sheets");
+
+const script = source("../google-apps-script/Code.gs");
+assert.match(script, /function doPost/, "Apps Script exposes a POST receiver");
+assert.match(script, /function doGet/, "Apps Script provides a no-write health check");
+assert.match(script, /editor Run button/, "Apps Script handles manual editor runs safely");
+assert.match(script, /computeHmacSha256Signature/, "Apps Script verifies request signatures");
 
 const client = source("../src/analyticsClient.js");
 assert.match(client, /\/api\/analytics\/event/, "frontend sends analytics to the production endpoint");

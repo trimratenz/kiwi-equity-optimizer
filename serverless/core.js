@@ -12,6 +12,13 @@ export function allowNonProductionWrites() { return process.env.TRIMRATE_ALLOW_N
 export function canPersistPublicData() { return isProductionEnvironment() || allowNonProductionWrites(); }
 export function canUseAdminTest() { return !isProductionEnvironment() || process.env.ADMIN_TEST_ENABLED === "true"; }
 
+// Safe to expose to an authenticated admin: this identifies the configured
+// Supabase project without exposing a URL path, API key, or other secret.
+export function supabaseProjectHost() {
+  try { return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "").host || "not configured"; }
+  catch { return "invalid URL"; }
+}
+
 export function json(response, status, body, headers = {}) {
   Object.entries({ "cache-control": "no-store", ...headers }).forEach(([key, value]) => response.setHeader(key, value));
   response.status(status).json(body);
@@ -45,6 +52,27 @@ export function rateLimit(request, limit = 5, scope = "public") {
   recent.push(now); buckets.set(key, recent); return true;
 }
 export function validEmail(value) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanText(value, 254)); }
+
+// Public submissions are stored in a Google Sheet through an Apps Script web
+// app. The Sheet is never exposed to the browser: requests are signed here in
+// the Vercel Function and verified by the script before a row is appended.
+function googleSheetsSettings() {
+  const url = cleanText(process.env.GOOGLE_SHEETS_WEBHOOK_URL, 500);
+  const secret = String(process.env.GOOGLE_SHEETS_WEBHOOK_SECRET || "");
+  if (!url || !secret) throw new Error("Google Sheets webhook is not configured.");
+  return { url, secret };
+}
+export async function appendGoogleSheet(action, data) {
+  const { url, secret } = googleSheetsSettings();
+  const payload = JSON.stringify({ action, data, timestamp: new Date().toISOString() });
+  const signature = createHmac("sha256", secret).update(payload).digest("hex");
+  const response = await fetch(url, { method: "POST", redirect: "follow", headers: { "content-type": "text/plain;charset=utf-8" }, body: JSON.stringify({ payload, signature }) });
+  if (!response.ok) throw new Error(`Google Sheets webhook failed (${response.status})`);
+  const text = await response.text();
+  if (text) { try { const result = JSON.parse(text); if (result.ok === false) throw new Error(result.error || "Google Sheets rejected the request."); } catch (error) { if (error instanceof SyntaxError) return; throw error; } }
+}
+export function appendLead(row) { return appendGoogleSheet("lead", { ...row, id: crypto.randomUUID(), created_at: new Date().toISOString() }); }
+export function appendAnalyticsEvent(row) { return appendGoogleSheet("activity", { ...row, id: crypto.randomUUID(), created_at: new Date().toISOString() }); }
 
 function timingSafeEquals(left, right) {
   const a = Buffer.from(String(left)); const b = Buffer.from(String(right));

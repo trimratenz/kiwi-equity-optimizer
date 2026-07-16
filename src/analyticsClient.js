@@ -20,6 +20,7 @@ export function analyticsContext() {
 export function trackEvent(eventName, payload = {}) {
   const context = analyticsContext();
   return postPublic("/api/analytics/event", {
+    visitor_id: context.visitorId,
     session_id: context.sessionId,
     event_name: eventName,
     page_path: context.path,
@@ -29,7 +30,10 @@ export function trackEvent(eventName, payload = {}) {
 }
 
 export function submitLeadPayload({ contact, consent, summaryPayload, website = "" }) {
+  const context = analyticsContext();
   return postPublic("/api/adviser-review-request", {
+    visitor_id: context.visitorId,
+    session_id: context.sessionId,
     contact,
     consent,
     summaryPayload,
@@ -40,12 +44,16 @@ export function submitLeadPayload({ contact, consent, summaryPayload, website = 
 
 function safeAnalyticsMetadata(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return {};
-  return Object.fromEntries(
+  const safe = Object.fromEntries(
     Object.entries(payload)
-      .filter(([key]) => !/name|email|phone|address|loan|balance|income|summary/i.test(key))
+      .filter(([key]) => !/name|email|phone|address|contact/i.test(key))
       .slice(0, 15)
       .map(([key, value]) => [key, typeof value === "string" ? value.slice(0, 120) : typeof value === "number" || typeof value === "boolean" ? value : ""])
   );
+  if (payload.activity && typeof payload.activity === "object" && !Array.isArray(payload.activity)) {
+    safe.activity = { inputs: payload.activity.inputs || {}, outputs: payload.activity.outputs || {} };
+  }
+  return safe;
 }
 
 function getStorageId(storage, key, prefix) {

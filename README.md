@@ -64,25 +64,23 @@ Recommended Vercel setup:
 
 GitHub Actions runs `npm test` and `npm run build` on pushes to `master`/`main` and on pull requests.
 
-## Vercel and Supabase backend MVP
+## Vercel and Google Sheets data collection
 
-Production APIs are Vercel Functions in `api/`, with Supabase Postgres as the durable store. The legacy file-backed local server remains only for existing local test coverage; do not use it for production hosting.
+Production APIs are Vercel Functions in `api/`, with Google Sheets as the export-ready store for leads and anonymous calculator/page-view events. The browser never receives Google credentials or the Sheet URL; Vercel signs each request for the Apps Script receiver.
 
 Required Vercel environment variables:
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY` (server-side only)
-- `DATABASE_URL` (reserved for future direct database tooling)
+- `GOOGLE_SHEETS_WEBHOOK_URL` (the deployed Apps Script Web App URL)
+- `GOOGLE_SHEETS_WEBHOOK_SECRET` (a long random value, server-side only)
 - `CRON_SECRET`
 - `ADMIN_EMAIL`
 - `ADMIN_PASSWORD`
 
-Apply the SQL migration in `supabase/migrations/202607120001_trimrate_mvp.sql` with the Supabase SQL editor or CLI before deploying. It creates: `market_rates`, `market_rate_snapshots`, `ocr_snapshots`, `adviser_review_requests`, and `analytics_events`.
+The ready-to-deploy Apps Script is in `google-apps-script/Code.gs`. Its two Script Properties must be `TRIMRATE_WEBHOOK_SECRET` (the same value as Vercel) and `TRIMRATE_SPREADSHEET_ID` (the ID in the created Sheet URL). Deploy it as a Web app, run as you, accessible to anyone. Keep the Sheet itself private. The workbook has `Leads` and `Events` tabs and can be exported directly as CSV or Excel.
 
 Vercel Cron is configured in `vercel.json` to refresh market rates daily at 03:00 UTC and review the RBNZ OCR forecast on the first day of each month at 03:15 UTC. Vercel automatically sends the cron secret as an Authorization bearer token. The market provider uses Rates API with a manual five-bank fallback. The OCR job records a monthly review even when the published RBNZ source date is unchanged, while retaining that source date for traceability.
 
-`/admin` is protected with an HttpOnly signed session using `ADMIN_EMAIL` and `ADMIN_PASSWORD`. After deployment, open `https://trimrate.co.nz/admin` and sign in. The dashboard provides summary metrics, raw tables, manual refresh actions, and CSV exports.
+Open the private Google Sheet to review or export leads and analytics. The legacy `/admin` dashboard remains only for rate-snapshot diagnostics while that optional feature is retained.
 
 For domains, add both `trimrate.co.nz` and `www.trimrate.co.nz` in Vercel, set the DNS records Vercel supplies, and redirect one to the preferred canonical domain in the Vercel domain settings. Test the public APIs, an adviser submission, CSV exports, cron logs, and admin logout after production deployment.
 

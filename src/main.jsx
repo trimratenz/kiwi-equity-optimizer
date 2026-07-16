@@ -822,6 +822,25 @@ function App() {
       summaryContent
     ]
   );
+  const activitySnapshot = useMemo(
+    () => ({
+      inputs: summaryPayloadBase.inputs,
+      outputs: {
+        ...summaryPayloadBase.outputs,
+        marketComparison: summaryPayloadBase.marketComparison,
+        refixScenario: summaryPayloadBase.refixScenario
+      }
+    }),
+    [summaryPayloadBase]
+  );
+
+  useEffect(() => {
+    if (loanAmount <= 0) return undefined;
+    const timeout = window.setTimeout(() => {
+      trackEvent("activity_updated", { activity: activitySnapshot }).catch(() => {});
+    }, 750);
+    return () => window.clearTimeout(timeout);
+  }, [activitySnapshot, loanAmount]);
 
   useEffect(() => {
     if (loanAmount > 0) {

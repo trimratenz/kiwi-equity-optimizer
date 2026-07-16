@@ -76,6 +76,8 @@ export function ExecutiveSummaryLeadStep({
   const [values, setValues] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
+  const [previewSubmission, setPreviewSubmission] = useState(false);
+  const [previewStored, setPreviewStored] = useState(false);
   const [consentTimestamp, setConsentTimestamp] = useState("");
   const [leadFormStarted, setLeadFormStarted] = useState(false);
   const primaryMarketRow = marketRateRows[0];
@@ -90,6 +92,7 @@ export function ExecutiveSummaryLeadStep({
     setValues(EMPTY_FORM);
     setErrors({});
     setSubmitted(false);
+    setPreviewStored(false);
     setConsentTimestamp("");
     setLeadFormStarted(false);
   }, [resetVersion]);
@@ -128,6 +131,8 @@ export function ExecutiveSummaryLeadStep({
     setValues((current) => ({ ...current, [field]: value }));
     setErrors((current) => ({ ...current, [field]: undefined }));
     setSubmitted(false);
+    setPreviewSubmission(false);
+    setPreviewStored(false);
 
     if (!leadFormStarted) {
       setLeadFormStarted(true);
@@ -165,7 +170,7 @@ export function ExecutiveSummaryLeadStep({
     };
 
     try {
-      await onSubmitLead({
+      const response = await onSubmitLead({
         contact: {
           name: values.name.trim(),
           email: values.email.trim(),
@@ -189,6 +194,8 @@ export function ExecutiveSummaryLeadStep({
         currentBank: values.currentBank,
         privacyConsent: values.privacyConsent
       });
+      setPreviewSubmission(response?.preview === true);
+      setPreviewStored(response?.preview === true && response?.stored === true);
       setSubmitted(true);
     } catch (error) {
       setErrors((current) => ({ ...current, submit: error.message || "Lead submission failed." }));
@@ -482,7 +489,11 @@ export function ExecutiveSummaryLeadStep({
             </button>
             {submitted && (
               <p className="rounded-lg bg-white px-3 py-2 text-sm font-bold text-[#3A6047]">
-                Request captured. The broker-ready summary payload was attached for review.
+                {previewStored
+                  ? "Preview test saved to the Preview Supabase project only."
+                  : previewSubmission
+                    ? "Preview test accepted. No adviser request or personal details were stored."
+                  : "Request captured. The broker-ready summary payload was attached for review."}
               </p>
             )}
             {errors.submit && (
