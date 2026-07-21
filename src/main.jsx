@@ -51,6 +51,63 @@ import { LegalPage } from "./LegalPage.jsx";
 import { InfoPage } from "./InfoPage.jsx";
 import { ContactPage } from "./ContactPage.jsx";
 
+const SITE_URL = "https://www.trimrate.co.nz";
+const HOMEPAGE_DESCRIPTION =
+  "Compare your mortgage repayments, current NZ bank rates and OCR forecast scenarios in under 2 minutes. Free New Zealand mortgage calculator.";
+const ROUTE_METADATA = {
+  "/": {
+    title: "TrimRate NZ | Mortgage Refix & Repayment Calculator",
+    description: HOMEPAGE_DESCRIPTION,
+    canonicalPath: "/"
+  },
+  "/calculator": {
+    title: "TrimRate NZ | Mortgage Refix & Repayment Calculator",
+    description: HOMEPAGE_DESCRIPTION,
+    canonicalPath: "/calculator"
+  },
+  "/info": {
+    title: "How TrimRate Works | NZ Mortgage Calculator",
+    description:
+      "Learn how TrimRate presents mortgage repayment calculations, NZ bank-rate comparisons, and OCR forecast scenarios for educational use.",
+    canonicalPath: "/info"
+  },
+  "/contact": {
+    title: "Contact TrimRate | NZ Mortgage Calculator",
+    description:
+      "Contact TrimRate with questions about using the New Zealand mortgage calculator and its educational repayment comparisons.",
+    canonicalPath: "/contact"
+  },
+  "/privacy-policy": {
+    title: "Privacy Policy | TrimRate",
+    description:
+      "Read how TrimRate handles information submitted while using its New Zealand mortgage calculator.",
+    canonicalPath: "/privacy-policy"
+  },
+  "/terms-of-use": {
+    title: "Terms of Use | TrimRate",
+    description:
+      "Review the terms for using TrimRate’s New Zealand mortgage calculator and its educational information.",
+    canonicalPath: "/terms-of-use"
+  }
+};
+
+function setMetaContent(selector, content) {
+  const meta = document.head.querySelector(selector);
+  if (meta) meta.setAttribute("content", content);
+}
+
+function updateDocumentHead(metadata) {
+  const canonicalUrl = `${SITE_URL}${metadata.canonicalPath}`;
+  document.title = metadata.title;
+  setMetaContent('meta[name="description"]', metadata.description);
+  setMetaContent('meta[property="og:title"]', metadata.title);
+  setMetaContent('meta[property="og:description"]', metadata.description);
+  setMetaContent('meta[property="og:url"]', canonicalUrl);
+  setMetaContent('meta[name="twitter:title"]', metadata.title);
+  setMetaContent('meta[name="twitter:description"]', metadata.description);
+  document.head.querySelector('link[rel="canonical"]')?.setAttribute("href", canonicalUrl);
+}
+
 function displayDate(date) {
   if (!date) return "";
   return new Intl.DateTimeFormat("en-NZ", {
@@ -1161,10 +1218,17 @@ function App() {
 }
 
 function Root() {
-  if (window.location.pathname === "/info") return <InfoPage />;
-  if (window.location.pathname === "/contact") return <ContactPage />;
-  if (window.location.pathname === "/privacy-policy") return <LegalPage type="privacy" />;
-  if (window.location.pathname === "/terms-of-use") return <LegalPage type="terms" />;
+  const pathname = window.location.pathname;
+  const metadata = ROUTE_METADATA[pathname] ?? ROUTE_METADATA["/"];
+
+  useEffect(() => {
+    updateDocumentHead(metadata);
+  }, [metadata]);
+
+  if (pathname === "/info") return <InfoPage />;
+  if (pathname === "/contact") return <ContactPage />;
+  if (pathname === "/privacy-policy") return <LegalPage type="privacy" />;
+  if (pathname === "/terms-of-use") return <LegalPage type="terms" />;
   return <App />;
 }
 
