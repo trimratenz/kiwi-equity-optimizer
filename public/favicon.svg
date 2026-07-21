@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>TrimRate</title>
+  <rect width="64" height="64" rx="14" fill="#092B63" />
+  <path d="M15 29 32 15l17 14" fill="none" stroke="#8EC5FF" stroke-linecap="round" stroke-linejoin="round" stroke-width="5" />
+  <path d="M23 27h18v5h-6v17h-6V32h-6z" fill="#fff" />
+</svg>
