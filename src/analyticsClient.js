@@ -25,6 +25,9 @@ export function trackEvent(eventName, payload = {}) {
     event_name: eventName,
     page_path: context.path,
     referrer: context.referrer,
+    utm_source: context.utmSource,
+    utm_medium: context.utmMedium,
+    utm_campaign: context.utmCampaign,
     metadata: safeAnalyticsMetadata(payload)
   });
 }
@@ -34,6 +37,11 @@ export function submitLeadPayload({ contact, consent, summaryPayload, website = 
   return postPublic("/api/adviser-review-request", {
     visitor_id: context.visitorId,
     session_id: context.sessionId,
+    page_path: context.path,
+    referrer: context.referrer,
+    utm_source: context.utmSource,
+    utm_medium: context.utmMedium,
+    utm_campaign: context.utmCampaign,
     contact,
     consent,
     summaryPayload,
@@ -51,7 +59,14 @@ function safeAnalyticsMetadata(payload) {
       .map(([key, value]) => [key, typeof value === "string" ? value.slice(0, 120) : typeof value === "number" || typeof value === "boolean" ? value : ""])
   );
   if (payload.activity && typeof payload.activity === "object" && !Array.isArray(payload.activity)) {
-    safe.activity = { inputs: payload.activity.inputs || {}, outputs: payload.activity.outputs || {} };
+    safe.activity = {
+      inputs: payload.activity.inputs || {},
+      outputs: payload.activity.outputs || {},
+      marketRateSnapshotId: payload.activity.marketRateSnapshotId || "",
+      marketRateSnapshot: payload.activity.marketRateSnapshot || {},
+      ocrForecastSnapshotId: payload.activity.ocrForecastSnapshotId || "",
+      ocrForecastSnapshot: payload.activity.ocrForecastSnapshot || {}
+    };
   }
   return safe;
 }

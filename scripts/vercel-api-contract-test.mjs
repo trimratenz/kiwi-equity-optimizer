@@ -4,9 +4,11 @@ import { readFileSync } from "node:fs";
 function source(path) { return readFileSync(new URL(path, import.meta.url), "utf8"); }
 
 const adviser = source("../api/public.js");
-assert.match(adviser, /consentGiven/, "adviser endpoint requires consent");
-assert.match(adviser, /rateLimit\(request\)/, "adviser endpoint is rate limited");
+assert.match(adviser, /consent\.privacyConsent !== true \|\| consent\.adviserContactConsent !== true/, "adviser endpoint requires both consent confirmations");
+assert.match(adviser, /dependencies\.rateLimit \|\| rateLimit/, "adviser endpoint is rate limited");
 assert.match(adviser, /website/, "adviser endpoint has a spam honeypot");
+assert.match(adviser, /validateAdviserRequest/, "adviser endpoint validates the complete consent and contact payload");
+assert.match(adviser, /buildLeadSheetRecord/, "adviser endpoint builds the Sheets lead schema explicitly");
 
 const analytics = adviser;
 assert.match(analytics, /appendAnalyticsEvent/, "analytics endpoint writes anonymous events to Google Sheets");
@@ -27,6 +29,8 @@ const client = source("../src/analyticsClient.js");
 assert.match(client, /\/api\/analytics\/event/, "frontend sends analytics to the production endpoint");
 assert.match(client, /safeAnalyticsMetadata/, "frontend strips sensitive analytics metadata");
 assert.match(client, /\/api\/adviser-review-request/, "frontend sends adviser requests to the production endpoint");
+assert.match(client, /utm_source/, "frontend includes attribution data in public submissions");
+assert.match(client, /page_path/, "frontend includes page path in lead submissions");
 
 const cron = source("../api/cron.js");
 assert.match(cron, /requireCron/, "cron endpoint checks CRON_SECRET");
