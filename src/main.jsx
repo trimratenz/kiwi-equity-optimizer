@@ -802,6 +802,7 @@ function App() {
             userCurrentRepaymentExact: tranche.userCurrentRepaymentExact,
             effectiveCurrentRepaymentExact: tranche.effectiveCurrentRepaymentExact,
             repaymentSource: tranche.repaymentSource,
+            paysMoreThanMinimum: tranche.paysMoreThanMinimum,
             repaymentFrequency: tranche.frequency,
             type: tranche.type,
             fixedTermMonths: tranche.fixedTermMonths,
@@ -855,7 +856,8 @@ function App() {
             selectedForecastTranche?.frequency || primaryFrequency
           ),
           scenarioKey: selectedForecastScenario?.key ?? "",
-          scenarioLabel: selectedForecastScenario?.label ?? ""
+          scenarioLabel: selectedForecastScenario?.label ?? "",
+          loanPartForecasts: trancheForecasts
         },
         visuals: {
           payoffRows,
@@ -899,6 +901,7 @@ function App() {
       selectedForecastRow,
       selectedForecastTermMonths,
       selectedForecastScenario,
+      trancheForecasts,
       payoffRows,
       summaryContent
     ]
@@ -993,7 +996,8 @@ function App() {
       contact: payload.contact,
       consent: payload.consent,
       summaryPayload: payload.summaryPayload,
-      website: payload.website
+      website: payload.website,
+      submissionId: payload.submissionId
     });
     window.dispatchEvent(new CustomEvent("trimrate:lead-capture", { detail: { ...payload, response } }));
     console.info("TrimRate mortgage adviser review requested", { leadId: response.leadId });
