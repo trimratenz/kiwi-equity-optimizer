@@ -22,6 +22,7 @@ export function trackEvent(eventName, payload = {}) {
   return postPublic("/api/analytics/event", {
     visitor_id: context.visitorId,
     session_id: context.sessionId,
+    activity_id: `activity_${crypto.randomUUID()}`,
     event_name: eventName,
     page_path: context.path,
     referrer: context.referrer,
@@ -32,11 +33,12 @@ export function trackEvent(eventName, payload = {}) {
   });
 }
 
-export function submitLeadPayload({ contact, consent, summaryPayload, website = "" }) {
+export function submitLeadPayload({ contact, consent, summaryPayload, website = "", submissionId = "" }) {
   const context = analyticsContext();
   return postPublic("/api/adviser-review-request", {
     visitor_id: context.visitorId,
     session_id: context.sessionId,
+    submission_id: submissionId,
     page_path: context.path,
     referrer: context.referrer,
     utm_source: context.utmSource,

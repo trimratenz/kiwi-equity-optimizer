@@ -72,8 +72,8 @@ export async function appendGoogleSheet(action, data) {
     throw error;
   }
 }
-export function appendLead(row) { return appendGoogleSheet("lead", { ...row, id: crypto.randomUUID(), created_at: new Date().toISOString() }); }
-export function appendAnalyticsEvent(row) { return appendGoogleSheet("activity", { ...row, id: crypto.randomUUID(), created_at: new Date().toISOString() }); }
+export function appendLead(row) { return appendGoogleSheet("lead", { ...row, id: cleanText(row.id, 120) || crypto.randomUUID(), created_at: new Date().toISOString() }); }
+export function appendAnalyticsEvent(row) { return appendGoogleSheet("activity", { ...row, id: cleanText(row.id, 120) || crypto.randomUUID(), created_at: new Date().toISOString() }); }
 
 function timingSafeEquals(left, right) {
   const a = Buffer.from(String(left)); const b = Buffer.from(String(right));

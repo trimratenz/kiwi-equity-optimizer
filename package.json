@@ -10,7 +10,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "verify": "pnpm test && pnpm run build",
-    "test": "pnpm run test:form && pnpm run test:golden && pnpm run test:refix && pnpm run test:snapshots && pnpm run test:summary && pnpm run test:backend && pnpm run test:vercel-api && pnpm run test:public-submission-schema && pnpm run test:security && pnpm run test:deployment-safeguards && pnpm run test:frontend-ux",
+    "test": "pnpm run test:form && pnpm run test:golden && pnpm run test:refix && pnpm run test:snapshots && pnpm run test:summary && pnpm run test:backend && pnpm run test:vercel-api && pnpm run test:public-submission-schema && pnpm run test:google-sheets-flattening && pnpm run test:security && pnpm run test:deployment-safeguards && pnpm run test:frontend-ux",
     "test:form": "node scripts/form-state-smoke-test.mjs",
     "test:golden": "node scripts/calculation-golden-test.mjs",
     "test:refix": "node scripts/refix-scenario-selection-test.mjs",
@@ -19,6 +19,7 @@
     "test:backend": "node scripts/backend-api-test.mjs",
     "test:vercel-api": "node scripts/vercel-api-contract-test.mjs",
     "test:public-submission-schema": "node scripts/public-submission-schema-test.mjs",
+    "test:google-sheets-flattening": "node scripts/google-sheets-flattening-test.mjs",
     "test:security": "node scripts/security-regression-test.mjs",
     "test:deployment-safeguards": "node scripts/deployment-safeguards-test.mjs",
     "test:frontend-ux": "node scripts/frontend-ux-test.mjs"

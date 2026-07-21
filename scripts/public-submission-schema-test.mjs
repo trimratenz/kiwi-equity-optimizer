@@ -6,6 +6,7 @@ import { adviserRequest, buildLeadActivityRecord, buildLeadSheetRecord, validate
 const validBody = {
   visitor_id: "visitor-test",
   session_id: "session-test",
+  submission_id: "lead-test-stable-id",
   page_path: "/calculator",
   referrer: "https://example.nz/article",
   utm_source: "google",
@@ -37,6 +38,7 @@ assert.equal(lead.consent_timestamp, "2026-07-21T09:59:00.000Z");
 assert.equal(lead.market_rate_snapshot_id, "rates-test");
 assert.equal(lead.ocr_forecast_snapshot_id, "ocr-test");
 assert.equal(lead.referral_status, "New");
+assert.equal(lead.id, "lead-test-stable-id", "a browser submission ID is retained for idempotent Sheets writes");
 assert.equal(lead.loan_details.loanBalance, 750000);
 
 const activity = buildLeadActivityRecord(lead, validated.summary);

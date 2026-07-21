@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ClipboardCheck, Send } from "lucide-react";
 import { currency, percent } from "../financialModel";
 import { emptyConsentFields, emptyContactFields } from "../summaryPayload.js";
@@ -80,6 +80,7 @@ export function ExecutiveSummaryLeadStep({
   const [previewStored, setPreviewStored] = useState(false);
   const [consentTimestamp, setConsentTimestamp] = useState("");
   const [leadFormStarted, setLeadFormStarted] = useState(false);
+  const submissionId = useRef(`lead_${crypto.randomUUID()}`);
   const primaryMarketRow = marketRateRows[0];
   const baseScenario = trancheForecasts[0]?.scenarios?.find((scenario) => scenario.key === "base");
   const incomeKnown = Number(salaryAmount) > 0;
@@ -95,6 +96,7 @@ export function ExecutiveSummaryLeadStep({
     setPreviewStored(false);
     setConsentTimestamp("");
     setLeadFormStarted(false);
+    submissionId.current = `lead_${crypto.randomUUID()}`;
   }, [resetVersion]);
 
   const contact = useMemo(
@@ -186,6 +188,7 @@ export function ExecutiveSummaryLeadStep({
           submittedAt
         },
         website: values.website || "",
+        submissionId: submissionId.current,
         summaryPayload: leadSummaryPayload,
         name: values.name.trim(),
         email: values.email.trim(),
