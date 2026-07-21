@@ -763,6 +763,21 @@ function App() {
       buildSummaryPayload({
         ratesSnapshotId: marketRates.snapshotId,
         ocrSnapshotId: ocrSnapshot.id,
+        marketRateSnapshot: {
+          id: marketRates.snapshotId,
+          source: marketRates.source,
+          captured: marketRates.captured,
+          lastRefreshed: marketRates.lastRefreshed,
+          status: marketRates.status
+        },
+        ocrForecastSnapshot: {
+          id: ocrSnapshot.id,
+          source: ocrSnapshot.source,
+          capturedAt: ocrSnapshot.capturedAt,
+          publishedAt: ocrSnapshot.publishedAt,
+          reviewedAt: ocrSnapshot.reviewedAt,
+          currentOcr: ocrSnapshot.currentOcr
+        },
         inputs: {
           hasExistingLoan: isExistingLoan,
           loanBalance: loanAmount,
@@ -851,7 +866,16 @@ function App() {
       }),
     [
       marketRates.snapshotId,
+      marketRates.source,
+      marketRates.captured,
+      marketRates.lastRefreshed,
+      marketRates.status,
       ocrSnapshot.id,
+      ocrSnapshot.source,
+      ocrSnapshot.capturedAt,
+      ocrSnapshot.publishedAt,
+      ocrSnapshot.reviewedAt,
+      ocrSnapshot.currentOcr,
       isExistingLoan,
       loanAmount,
       loanStructure,
@@ -886,7 +910,11 @@ function App() {
         ...summaryPayloadBase.outputs,
         marketComparison: summaryPayloadBase.marketComparison,
         refixScenario: summaryPayloadBase.refixScenario
-      }
+      },
+      marketRateSnapshotId: summaryPayloadBase.ratesSnapshotId,
+      marketRateSnapshot: summaryPayloadBase.marketRateSnapshot,
+      ocrForecastSnapshotId: summaryPayloadBase.ocrSnapshotId,
+      ocrForecastSnapshot: summaryPayloadBase.ocrForecastSnapshot
     }),
     [summaryPayloadBase]
   );

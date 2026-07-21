@@ -24,6 +24,8 @@ export function buildSummaryPayload({
   createdAt = new Date().toISOString(),
   ratesSnapshotId = "",
   ocrSnapshotId = "",
+  marketRateSnapshot = {},
+  ocrForecastSnapshot = {},
   contact = emptyContactFields(),
   consent = emptyConsentFields(),
   inputs,
@@ -39,6 +41,8 @@ export function buildSummaryPayload({
     calculationEngineVersion: CALCULATION_ENGINE_VERSION,
     ratesSnapshotId,
     ocrSnapshotId,
+    marketRateSnapshot,
+    ocrForecastSnapshot,
     contact: {
       ...emptyContactFields(),
       ...contact
